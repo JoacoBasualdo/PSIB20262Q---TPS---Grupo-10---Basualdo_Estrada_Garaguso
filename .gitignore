@@ -1,0 +1,26 @@
+# Datos pesados (Dataset de Physionet)
+Dataset/
+data/
+*.edf
+*.csv
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Cuadernos Jupyter (si usan para pruebas)
+.ipynb_checkpoints/
+
+# Configuraciones de IDEs locales (VS Code, PyCharm, etc.)
+.vscode/
+.idea/
+
+# Archivos ocultos del sistema operativo
+.DS_Store
+Thumbs.db

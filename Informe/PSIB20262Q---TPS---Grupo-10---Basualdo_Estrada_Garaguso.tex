@@ -1,0 +1,153 @@
+\documentclass[10pt]{article}
+
+% =============================================================================
+% DATOS GENERALES DEL TRABAJO
+% =============================================================================
+\newcommand{\materia}{Procesamiento de Señales e Imágenes Biomédicas}
+\newcommand{\institucion}{Instituto Tecnológico de Buenos Aires}
+\newcommand{\numeroTP}{}
+\newcommand{\nombreTP}{Trabajo Práctico final}
+\newcommand{\anioTP}{2026}
+
+% =============================================================================
+% FORMATO EXIGIDO POR LA CÁTEDRA
+% =============================================================================
+\textheight=21cm
+\textwidth=15cm
+\topmargin=-0.5cm
+\oddsidemargin=1cm
+\evensidemargin=1cm
+\parindent=0mm
+
+% =============================================================================
+% PAQUETES
+% =============================================================================
+
+% Codificación e idioma
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+
+% Matemática y unidades
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\sisetup{output-decimal-marker={,}}
+
+% Figuras y tablas
+\usepackage{graphicx}
+\graphicspath{{imagenes/}}
+\DeclareGraphicsExtensions{.pdf,.png,.jpg,.jpeg}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{adjustbox}
+
+% Formato de página
+\usepackage{fancyhdr}
+\usepackage{multicol}
+\usepackage{xcolor}
+
+% Enlaces y referencias
+\usepackage[hidelinks]{hyperref}
+
+% =============================================================================
+% CONFIGURACIÓN GENERAL
+% =============================================================================
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{28pt}
+\fancyhead[L]{Procesamiento de Señales e Imágenes Biomédicas - ITBA}
+\fancyhead[R]{Trabajo Práctico Final}
+\fancyfoot[C]{\thepage}
+
+\begin{document}
+
+% =============================================================================
+% CARÁTULA
+% =============================================================================
+\begin{center}
+
+\textsc{\LARGE \materia}\\[0.2cm]
+\textsc{\Large \institucion}\\[0.2cm]
+
+\HRule \\[0.2cm]
+{\huge\bfseries \numeroTP{}  \nombreTP \\[0.2cm]}
+\HRule \\[1cm]
+
+\begin{multicols}{2}
+
+% Profesores
+\begin{flushleft}
+    \large
+    \textbf{Profesores:}\\
+    Roberto Sebastián \textsc{Tomás}\\
+    Francisco \textsc{Tassara}
+    \\
+    Victoria \textsc{Reppucci}\\
+    Lucila \textsc{Capurro}
+\end{flushleft}
+
+\columnbreak
+
+% Integrantes
+\begin{flushleft}
+    \large
+    \textbf{Alumnos/as:}\\
+    Joaquín \textsc{Basualdo} -- 65658\\
+    Bautista \textsc{Estrada} -- 65583\\
+    Facundo \textsc{Garaguso Fernandez} -- 65436\\
+    
+\end{flushleft}
+
+\end{multicols}
+
+\vspace{0.5cm}
+
+\renewcommand{\arraystretch}{1.6}
+
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{|p{6cm}|p{7cm}|}
+\hline
+\textbf{Criterio} & \textbf{Calificación} \\ \hline
+Presentación & \\ \hline
+Desarrollo & \\ \hline
+Conclusiones & \\ \hline
+Nota Final & \\ \hline\hline
+Firma y Fecha & \\ \hline
+\end{tabular}
+\end{adjustbox}
+
+\end{center}
+
+\thispagestyle{fancy}
+
+% =============================================================================
+% ÍNDICE
+% =============================================================================
+\newpage
+\tableofcontents
+\thispagestyle{fancy}
+
+\newpage
+
+% =============================================================================
+% INFORME
+% El cuerpo principal debe ocupar entre 2 y 4 carillas, sin contar carátula,
+% índice, anexo ni bibliografía.
+% =============================================================================
+
+\section{Introducción}
+
+\section{Materiales y Métodos}
+
+\section{Resultados}
+
+\section{Conclusiones}
+
+
+
+
+\end{document}
