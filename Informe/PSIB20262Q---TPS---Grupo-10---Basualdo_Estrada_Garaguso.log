@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.9.8)  12 OCT 2026 16:14
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.9.8)  14 OCT 2026 14:54
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -501,30 +501,30 @@ Package babel Info: 'spanish' activates 'spanish' shorthands.
 )
 \openout1 = `PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 66.
-LaTeX Font Info:    ... okay on input line 66.
-LaTeX Info: Redefining \. on input line 66.
-LaTeX Info: Redefining \% on input line 66.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 76.
+LaTeX Font Info:    ... okay on input line 76.
+LaTeX Info: Redefining \. on input line 76.
+LaTeX Info: Redefining \% on input line 76.
  (c:/texlive/2026/texmf-dist/tex/latex/translations/translations-basic-dictionary-spanish.trsl
 File: translations-basic-dictionary-spanish.trsl (spanish translation file `translations-basic-dictionary')
 )
-Package translations Info: loading dictionary `translations-basic-dictionary' for `spanish'. on input line 66.
+Package translations Info: loading dictionary `translations-basic-dictionary' for `spanish'. on input line 76.
  (c:/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
 \scratchcounter=\count350
@@ -547,17 +547,17 @@ File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: hyperref package is loaded.
 Package caption Info: End \AtBeginDocument code.
-Package hyperref Info: Link coloring OFF on input line 66.
+Package hyperref Info: Link coloring OFF on input line 76.
  (./PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.out) (./PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.out)
 \@outlinefile=\write3
 \openout3 = `PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.out'.
 
 Package babel Info: Main language set to 'spanish'.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 112.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 122.
  (c:/texlive/2026/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 112.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 122.
  (c:/texlive/2026/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 ) [1{c:/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{c:/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc}
@@ -569,7 +569,28 @@ LaTeX Info: Redefining \% on input line 1.
 \tf@toc=\write4
 \openout4 = `PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.toc'.
 
- [2] [3] (./PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.aux
+ [2]
+Overfull \hbox (17.69182pt too wide) in paragraph at lines 164--165
+[]\T1/cmr/m/n/10 Cita bi-blio-grá-fi-ca: https://archive.org/details/kandel-e.-r.-j.-h.-schwartz-y-t.-m.-jessell.-principios-
+ []
+
+<Imagenes/CortezaMotora.png, id=83, 469.755pt x 365.11406pt>
+File: Imagenes/CortezaMotora.png Graphic file (type png)
+<use Imagenes/CortezaMotora.png>
+Package pdftex.def Info: Imagenes/CortezaMotora.png  used on input line 168.
+(pdftex.def)             Requested size: 170.71393pt x 132.68332pt.
+[3 <./Imagenes/CortezaMotora.png>]
+<Imagenes/Sistema 10-20.png, id=91, 807.7678pt x 328.97906pt>
+File: Imagenes/Sistema 10-20.png Graphic file (type png)
+<use Imagenes/Sistema 10-20.png>
+Package pdftex.def Info: Imagenes/Sistema 10-20.png  used on input line 188.
+(pdftex.def)             Requested size: 192.0548pt x 78.21365pt.
+<Imagenes/Setup.png, id=92, 363.60844pt x 247.67531pt>
+File: Imagenes/Setup.png Graphic file (type png)
+<use Imagenes/Setup.png>
+Package pdftex.def Info: Imagenes/Setup.png  used on input line 195.
+(pdftex.def)             Requested size: 192.0548pt x 130.82133pt.
+ [4 <./Imagenes/Sistema 10-20.png> <./Imagenes/Setup.png>] [5] [6{c:/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc}] (./PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.aux
 LaTeX Info: Redefining \. on input line 12.
 LaTeX Info: Redefining \% on input line 12.
 )
@@ -578,21 +599,21 @@ LaTeX2e <2026-06-01>
 L3 programming layer <2026-08-10>
  ***********
 Package rerunfilecheck Info: File `PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.out' has not changed.
-(rerunfilecheck)             Checksum: EE80FD6131E4E6218BD61BEB4F52AA7F;454.
+(rerunfilecheck)             Checksum: 706DF6B979A41C71886E03C1B5D503A3;1270.
  ) 
 Here is how much of TeX's memory you used:
- 19188 strings out of 467099
- 372927 string characters out of 5412503
- 771909 words of memory out of 5000000
- 48306 multiletter control sequences out of 15000+600000
- 638290 words of font info for 60 fonts, out of 8000000 for 9000
+ 19283 strings out of 467099
+ 374722 string characters out of 5412503
+ 772251 words of memory out of 5000000
+ 48383 multiletter control sequences out of 15000+600000
+ 640763 words of font info for 64 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 74i,11n,80p,448b,1056s stack positions out of 10000i,1000n,20000p,200000b,200000s
-<c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx2074.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1728.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1200.pfb>
-Output written on PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.pdf (3 pages, 131971 bytes).
+ 74i,11n,80p,962b,1059s stack positions out of 10000i,1000n,20000p,200000b,200000s
+<c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx2074.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1728.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0900.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti0500.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti1000.pfb>
+Output written on PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.pdf (6 pages, 812458 bytes).
 PDF statistics:
- 91 PDF objects out of 1000 (max. 8388607)
- 67 compressed objects within 1 object stream
- 9 named destinations out of 1000 (max. 500000)
- 33 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 189 PDF objects out of 1000 (max. 8388607)
+ 142 compressed objects within 2 object streams
+ 22 named destinations out of 1000 (max. 500000)
+ 112 words of extra memory for PDF output out of 10000 (max. 10000000)
 
