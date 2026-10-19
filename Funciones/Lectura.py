@@ -1,52 +1,83 @@
-import mne
-import pandas as pd
 import os
-
-def cargar_eeg_paciente(sujeto_id, ruta_base="Dataset/EEG"):
-    """
-    Carga los datos crudos de EEG en formato EDF para un paciente en las 3 velocidades.
-    Se ajusta a la estructura: Dataset/EEG/S[id]/S[id]_[speed]_raw.edf
-    """
-    velocidades = ["0.5", "0.75", "1"]
-    eeg_por_velocidad = {}
-    
-    # Apunta a la subcarpeta del sujeto (ej. Dataset/EEG/S10)
-    ruta_sujeto = os.path.join(ruta_base, f"S{sujeto_id}")
-    
-    print(f"--- Cargando EEG para Sujeto {sujeto_id} ---")
-    
-    for vel in velocidades:
-        nombre_archivo = f"S{sujeto_id}_{vel}_raw.edf"
-        ruta_completa = os.path.join(ruta_sujeto, nombre_archivo)
-        
-        try:
-            print(f"Cargando EEG a {vel} m/s...")
-            eeg_raw = mne.io.read_raw_edf(ruta_completa, preload=True, verbose=False)
-            eeg_por_velocidad[vel] = eeg_raw
-        except FileNotFoundError:
-            print(f"  -> Error: No se encontró {ruta_completa}")
-            
-    return eeg_por_velocidad
-
-def cargar_emg_paciente(sujeto_id, ruta_base="Dataset/EMG"):
-    """
-    Carga los datos de activación muscular en formato CSV para un paciente.
-    Se ajusta a la estructura: Dataset/EMG/EMG_S[id]_[speed].csv
-    """
-    velocidades = ["0.5", "0.75", "1.0"]
-    emg_por_velocidad = {}
-    
-    print(f"--- Cargando EMG para Sujeto {sujeto_id} ---")
-    
-    for vel in velocidades:
-        nombre_archivo = f"EMG_S{sujeto_id}_{vel}.csv"
-        ruta_completa = os.path.join(ruta_base, nombre_archivo)
-        
-        try:
-            print(f"Cargando EMG a {vel} m/s...")
-            emg_df = pd.read_csv(ruta_completa)
-            emg_por_velocidad[vel] = emg_df
-        except FileNotFoundError:
-            print(f"  -> Error: No se encontró {ruta_completa}")
-            
-    return emg_por_velocidad
+import mne # Lee archivos .edf
+import pandas as pd
+ 
+RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ 
+VELOCIDADES = ["0.5", "0.75", "1"]
+ 
+CANALES_EEG = ["Fp1", "Fp2", "F7", "F3", "Fz", "F4", "F8",
+               "T3", "C3", "Cz", "C4", "T4",
+               "T5", "P3", "Pz", "P4", "T6", "O1", "O2"]
+CANALES_REFERENCIA = ["A1", "A2"]
+CANALES_AUXILIARES = ["X1", "X2", "X3"]
+ 
+# Lee la velocidad de cada pacientes con la funcion leer (ruta) y lo guarda en datos. Si el archivo no existe lo guarda en faltantes
+def _cargar_por_velocidad(modalidad, sujeto_id, construir_ruta, leer):
+    datos = {}
+    faltantes = []
+    for vel in VELOCIDADES:
+        ruta = construir_ruta(vel)
+        if not os.path.exists(ruta):
+            faltantes.append(ruta)
+            continue
+        datos[vel] = leer(ruta)
+    print(f"{modalidad} S{sujeto_id}: {len(datos)}/{len(VELOCIDADES)} archivos cargados")
+    for ruta in faltantes:
+        print(f"  Falta: {ruta}")
+    return datos
+ 
+# Arregla el nombre para que MNE comprenda la posicion del electrodo
+def _nombre_estandar(nombre):
+    base = nombre.replace("EEG", "").strip().split("-")[0].strip()
+    for canal in CANALES_EEG + CANALES_REFERENCIA + CANALES_AUXILIARES:
+        if base.lower() == canal.lower():
+            return canal
+    return nombre
+ 
+# Arregla el nombre, borra canales que no se usaron y ubica cada eleectrodo segunn el sistema 10-20 
+def _configurar_canales_eeg(raw):
+    raw.rename_channels({ch: _nombre_estandar(ch) for ch in raw.ch_names})
+    tipos = {}
+    for ch in raw.ch_names:
+        if ch in CANALES_EEG or ch in CANALES_REFERENCIA:
+            tipos[ch] = "eeg"
+        elif "trigger" in ch.lower():
+            tipos[ch] = "stim"
+        else:
+            tipos[ch] = "misc"
+    raw.set_channel_types(tipos)
+    auxiliares = [ch for ch in CANALES_AUXILIARES if ch in raw.ch_names]
+    raw.drop_channels(auxiliares)
+    raw.set_montage("standard_1020", on_missing="warn")
+    return raw
+ 
+ 
+ 
+ 
+# Buscan los archivos de un sujeto en las 3 velocidades, los abren y devuelve un diccionario con un valor de esa velocidad.
+def cargar_eeg_paciente(sujeto_id, ruta_base=os.path.join(RAIZ_PROYECTO, "Dataset", "EEG")):
+    def construir_ruta(vel):
+        return os.path.join(ruta_base, f"S{sujeto_id}", f"S{sujeto_id}_{vel}_raw.edf")
+ 
+    def leer(ruta):
+        raw = mne.io.read_raw_edf(ruta, preload=True, verbose=False)
+        return _configurar_canales_eeg(raw)
+ 
+    return _cargar_por_velocidad("EEG", sujeto_id, construir_ruta, leer)
+ 
+ 
+def cargar_emg_paciente(sujeto_id, ruta_base=os.path.join(RAIZ_PROYECTO, "Dataset", "EMG"),
+                        sufijos={"0.5": "0.5", "0.75": "0.75", "1": "1.0"}):
+    def construir_ruta(vel):
+        return os.path.join(ruta_base, f"EMG_S{sujeto_id}_{sufijos[vel]}.csv")
+ 
+    return _cargar_por_velocidad("EMG", sujeto_id, construir_ruta, pd.read_csv)
+ 
+ 
+def cargar_fp_paciente(sujeto_id, ruta_base=os.path.join(RAIZ_PROYECTO, "Dataset", "FP"),
+                       sufijos={"0.5": "0.5", "0.75": "0.75", "1": "1"}):
+    def construir_ruta(vel):
+        return os.path.join(ruta_base, f"FP_S{sujeto_id}_{sufijos[vel]}.csv")
+ 
+    return _cargar_por_velocidad("FP", sujeto_id, construir_ruta, pd.read_csv)
