@@ -10,6 +10,7 @@ def main():
 
     Reporte.agregar_subtitulo("Etapa 1: Lectura de datos")
     dict_eeg = Lectura.cargar_eeg_paciente(sujeto_id=sujeto_id)
+    dict_fp = Lectura.cargar_fp_paciente(sujeto_id=sujeto_id)
 
     if "0.5" in dict_eeg:
         print("\nVerificación rápida de los datos a 0.5 m/s:")
@@ -105,6 +106,95 @@ def main():
         Reporte.agregar_figura(fig)
     Reporte.agregar_figura(Visualizacion_Inicial.graficar_psd(
         dict_eeg_pb, canales=canales_con_pz, titulo="PSD después del pasabajos (45 Hz)"))
+    
+    Reporte.agregar_subtitulo("Etapa 4: Fuerza vertical de las plataformas de fuerza")
+    print("Las plataformas de fuerza (FP) se usan para detectar los eventos de la marcha: el contacto del")
+    print("talón (heel strike) y el despegue del pie (toe off).")
+    print("  - La cinta tiene dos bandas, cada una con su plataforma, así que cada plataforma registra un")
+    print("    solo pie. La plataforma 1 es la pierna izquierda y la 2 la derecha (Katmah et al.). Lo")
+    print("    confirma el centro de presión lateral (COPx), negativo en la plataforma 1 y positivo en la 2.")
+    print("  - Se usa la fuerza vertical (Fz, en newtons): vale cerca de cero con el pie en el aire y cientos")
+    print("    de newtons con el pie apoyado.")
+    print("  - Las plataformas muestrean a 1000 Hz. La columna Timestamp viene en cero, así que el tiempo")
+    print("    se reconstruye a partir del número de muestra: tiempo = muestra / 1000.")
+    print("  - La columna Sync también viene en cero: la cinta no recibió el trigger de sincronización")
+    print("    (Katmah et al.), así que puede haber un pequeño desfase con el EEG.")
+    dict_fz = Procesamiento.extraer_fz(dict_fp)
+
+    print("\nCorrección del offset")
+    print("  - Con el pie en el aire, Fz debería valer cero, pero algunas plataformas tienen un desplazamiento")
+    print("    (offset). Se estima como la mediana del 20% de valores más bajos de Fz, que corresponden al")
+    print("    balanceo, y se resta a toda la señal.")
+    dict_fz_corregido = Procesamiento.corregir_offset(dict_fz)
+
+    print("\nFuerza vertical de cada pie antes y después de corregir el offset")
+    for fig in Procesamiento.graficar_fz(dict_fz, dict_fz_corregido):
+        Reporte.agregar_figura(fig)
+
+
+    print("\nDetección de eventos: contacto del talón y despegue del pie")
+    print("  - Un pie se considera apoyado cuando su Fz supera 30 N. El umbral es bajo para detectar el")
+    print("    contacto apenas empieza, pero queda por encima del ruido de la plataforma con el pie en el")
+    print("    aire (unos pocos newtons).")
+    print("  - Contacto del talón (heel strike): Fz pasa de estar por debajo a estar por encima del umbral.")
+    print("    Despegue del pie (toe off): Fz vuelve a caer por debajo del umbral.")
+    print("  - Al apoyar el talón la señal oscila y puede cruzar el umbral varias veces seguidas. Para no")
+    print("    detectar contactos falsos, se descartan los tramos de apoyo o balanceo de menos de 100 ms,")
+    print("    mucho más cortos que cualquier fase real de la marcha.")
+    print("  - La tabla muestra la cantidad de contactos, la duración media del ciclo y el porcentaje del")
+    print("    ciclo en apoyo. En marcha normal el apoyo ocupa alrededor del 60% del ciclo.")
+    dict_eventos = Procesamiento.detectar_eventos(dict_fz_corregido)
+
+    print("\nSegmentación del ciclo en fases (tomando como referencia el pie derecho)")
+    print("  - El ciclo va de un contacto del talón derecho al siguiente y se divide en 4 fases según")
+    print("    qué pies están apoyados:")
+    print("      Doble apoyo inicial: apoyan los dos pies, después del contacto del talón derecho.")
+    print("      Apoyo simple: apoya solo el pie derecho.")
+    print("      Doble apoyo final: apoyan los dos pies, después del contacto del talón izquierdo.")
+    print("      Balanceo: el pie derecho está en el aire.")
+    print("  - Con las plataformas no se puede dividir el balanceo en subfases, porque con el pie en el aire")
+    print("    la fuerza es cero.")
+    print("  - Referencia en marcha normal: cada doble apoyo cerca del 10% del ciclo, el apoyo simple cerca")
+    print("    del 40% y el balanceo cerca del 40%.")
+    print("  - Porcentaje del ciclo en cada fase:")
+    dict_fases = Procesamiento.etiquetar_fases(dict_eventos)
+
+    print("\nFuerza vertical con las fases marcadas")
+    for fig in Procesamiento.graficar_fases(dict_fz_corregido, dict_eventos, dict_fases):
+        Reporte.agregar_figura(fig)
+
+    Reporte.agregar_subtitulo("Etapa 5: Segmentación del EEG en ciclos y fases de la marcha")
+    print("Alineación temporal entre las plataformas y el EEG")
+    print("  - Los eventos se detectaron en el tiempo de las plataformas (1000 Hz) y hay que llevarlos al")
+    print("    tiempo del EEG (300 Hz): a cada muestra del EEG se le asigna la fase de la muestra de las")
+    print("    plataformas que ocurre en el mismo instante.")
+    print("  - Según Katmah et al., la cinta se inició a mano junto con el trigger, así que el registro es")
+    print("    casi sincrónico. Por ahora se asume que los dos registros empiezan en el mismo instante")
+    print("    (desfase = 0). Este supuesto se va a verificar más adelante con el IMU, que sí recibió el trigger.")
+    dict_fases_eeg = Procesamiento.alinear_fases_eeg(dict_eeg_pb, dict_fases)
+
+    print("\nEEG procesado con las fases marcadas")
+    for fig in Procesamiento.graficar_eeg_fases(dict_eeg_pb, dict_fases_eeg):
+        Reporte.agregar_figura(fig)
+
+    print("\nSegmentación en ciclos")
+    print("  - Igual que Seeber et al. (2014), un ciclo va de un contacto del talón derecho al siguiente.")
+    print("  - Los ciclos no duran todos lo mismo. Para poder compararlos y promediarlos, cada uno se")
+    print("    normaliza en el tiempo (time warping, Seeber et al.): se expresa de 0 a 100% del ciclo y se")
+    print("    remuestrea a una cantidad fija de puntos, igual a la duración mediana del ciclo por la")
+    print("    frecuencia de muestreo del EEG.")
+    print("  - Se descartan los ciclos que duran un 30% más o menos que la mediana (por ejemplo, un")
+    print("    tropiezo o un error de detección) y los que quedan fuera del registro del EEG.")
+    dict_ciclos = Procesamiento.segmentar_ciclos(dict_eeg_pb, dict_eventos, dict_fases)
+
+    print("\nCiclo de marcha promedio de los canales sensoriomotores")
+    print("  - Se promedian todos los ciclos punto a punto. La línea negra es la media y la zona gris el")
+    print("    desvío estándar. Las fases sombreadas son las más frecuentes en cada punto del ciclo.")
+    print("  - Si el promedio muestra una forma marcada y repetible, puede deberse al artefacto de")
+    print("    movimiento, que también se repite en cada paso. Por eso el análisis de las bandas de")
+    print("    frecuencia en cada fase es el siguiente paso.")
+    for fig in Procesamiento.graficar_ciclo_promedio(dict_ciclos):
+        Reporte.agregar_figura(fig)
 
     Reporte.guardar_pdf(ruta_pdf, titulo=f"Resultados - Sujeto {sujeto_id}")
 
