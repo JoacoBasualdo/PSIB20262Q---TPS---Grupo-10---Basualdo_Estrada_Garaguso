@@ -5,7 +5,9 @@ from Funciones import (
     Visualizacion_Inicial,
     Procesamiento,
     Reporte,
-    Analisis_Espectral
+    Analisis_Espectral,
+    Analisis_Estadistico,
+    Control_Calidad
 )
 
 
@@ -513,6 +515,46 @@ def main():
         dict_fases,
         primer_ciclo=primer_ciclo
     )
+    
+    # ==========================================================
+    # CONTROL DE CALIDAD DE LOS CICLOS
+    # ==========================================================
+
+    Reporte.agregar_subtitulo(
+        "Control de calidad de los ciclos de EEG"
+    )
+
+    print("\nEvaluacion de calidad en C3, Cz y C4")
+
+    print(
+        "  - Se analizan los ciclos validos desde el segundo."
+    )
+    print(
+        "  - Se calcula amplitud pico a pico, RMS y saltos."
+    )
+    print(
+        "  - Se identifican ciclos atipicos mediante MAD."
+    )
+    print(
+        "  - Se conservan los datos originales para comparar."
+    )
+
+    dict_ciclos_qc, diagnostico_qc, figuras_qc = (
+        Control_Calidad.controlar_calidad_ciclos(
+            dict_eeg_pb,
+            dict_ciclos,
+            canales=("C3", "Cz", "C4"),
+            umbral_mad=3.5,
+            umbral_extremo=7.0
+        )
+    )
+
+    for fig in figuras_qc:
+        Reporte.agregar_figura(fig)
+
+    # Seleccionamos los ciclos depurados para el analisis
+    dict_ciclos_analisis = dict_ciclos_qc
+
 
     print(
         "\nCiclo promedio de los canales sensoriomotores"
@@ -531,9 +573,7 @@ def main():
         "tiempo-frecuencia de mu, beta y gamma baja."
     )
 
-    for fig in Procesamiento.graficar_ciclo_promedio(
-            dict_ciclos):
-
+    for fig in Procesamiento.graficar_ciclo_promedio(dict_ciclos_analisis):
         Reporte.agregar_figura(fig)
 
     # ==========================================================
@@ -578,7 +618,7 @@ def main():
 
     resultados_tf = Analisis_Espectral.analizar_tiempo_frecuencia(
         dict_eeg_pb,
-        dict_ciclos,
+        dict_ciclos_analisis,
         canales=("C3", "Cz", "C4"),
         fmin=8.0,
         fmax=40.0,
@@ -634,6 +674,68 @@ def main():
             resumen_fases):
 
         Reporte.agregar_figura(fig)
+        
+
+    # ==========================================================
+    # ETAPA 7: GPM Y PRUEBA ESTADISTICA
+    # ==========================================================
+
+    Reporte.agregar_subtitulo(
+        "Etapa 7: GPM y significancia estadística"
+    )
+
+    print("\nAnálisis GPM según Seeber et al. (2014)")
+
+    print(
+        "  - Se estudia la modulación de la amplitud "
+        "del EEG sincronizada con el ciclo de marcha."
+    )
+    print(
+        "  - Se consideran dos períodos de modulación "
+        "por ciclo completo."
+    )
+    print(
+        "  - Se analizan las bandas mu (8-13 Hz), "
+        "beta (13-30 Hz) y gamma baja (24-40 Hz)."
+    )
+    print(
+        "  - La evaluación estadística incluye todas las "
+        "frecuencias entre 8 y 40 Hz."
+    )
+    print(
+        "  - Se utilizan C3, Cz y C4: 99 comparaciones."
+    )
+    print(
+        "  - Se realizan 10000 desplazamientos aleatorios."
+    )
+    print(
+        "  - Se aplica corrección max-T para controlar "
+        "la FWER al 5%."
+    )
+
+    resultados_gpm, figuras_gpm = (
+        Analisis_Estadistico.analizar_gpm_permutaciones(
+            dict_eeg_pb,
+            dict_ciclos_analisis,
+            canales=("C3", "Cz", "C4"),
+            fmin=8.0,
+            fmax=40.0,
+            paso=1.0,
+            n_ciclos_wavelet=4.0,
+            n_puntos=100,
+            n_permutaciones=10000,
+            semilla=42
+        )
+    )
+
+    for fig in figuras_gpm:
+        Reporte.agregar_figura(fig)
+
+    print(
+        "\nLos resultados significativos indican modulación "
+        "temporal respecto del ciclo de marcha, pero no "
+        "demuestran por sí solos un origen neuronal."
+    )
 
     # ==========================================================
     # EXPORTACION DEL PDF

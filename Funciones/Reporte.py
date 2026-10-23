@@ -49,6 +49,7 @@ def agregar_subtitulo(texto):
 def agregar_figura(fig):
     _cerrar_texto()
     _elementos.append(("figura", fig))
+    plt.close(fig)
 
 
 def _guardar_pagina(pdf, fig):
