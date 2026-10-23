@@ -25,3 +25,8 @@ pandas>=2.0.0
 # Generación de gráficos y exportación a PDF (PdfPages)
 
 matplotlib>=3.6.0
+
+
+# API de OpenSim (escalado del modelo, .mot y AnalyzeTool)
+
+opensim>=4.5

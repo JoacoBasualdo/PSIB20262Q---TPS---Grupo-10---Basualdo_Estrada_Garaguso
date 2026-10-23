@@ -24,3 +24,9 @@ env/
 # Archivos ocultos del sistema operativo
 .DS_Store
 Thumbs.db
+# OpenSim: la plantilla y los modelos se versionan; los .sto de resultados no
+!OpenSim/Modelos/*.csv
+OpenSim/**/*.sto
+# Archivos comprimidos del dataset
+*.tar.gz
+*.zip

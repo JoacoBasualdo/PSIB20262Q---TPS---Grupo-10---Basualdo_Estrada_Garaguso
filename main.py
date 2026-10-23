@@ -7,7 +7,8 @@ from Funciones import (
     Reporte,
     Analisis_Espectral,
     Analisis_Estadistico,
-    Control_Calidad
+    Control_Calidad,
+    OpenSim_Marcha
 )
 
 
@@ -736,6 +737,52 @@ def main():
         "temporal respecto del ciclo de marcha, pero no "
         "demuestran por sí solos un origen neuronal."
     )
+
+    # ==========================================================
+    # ETAPA 8: OPENSIM Y COMPARACION CON IMU
+    # ==========================================================
+    
+    # Primero, se mide el ritmo de la marcha usando la frecuencia de la fuerza vertical
+    # Luego, usando los datos del sujeto 10, se escala el modelo de OpenSIM genérico al sujeto usando subject-info
+    # Genera el movimiento en un archivo .mot, crean la marcha de S10 ajustando una marcha real de referencia a los datos de las plataformas
+    # Corre el movimiento en OpenSIM, calculando ubicaciones de partes del cuerpo y centro de masa
+    # Compara el OpenSIM con los valores del IMU medidos por sensores para validar la simulación
+    # Todo esto ayuda a validar la segmentación hecha por el algoritmo diseñado!
+
+    Reporte.agregar_subtitulo(
+        "Etapa 8: Modelado en OpenSim y comparación con IMU"
+    )
+
+    print(
+        "  - La frecuencia de zancada se obtiene del pico de la PSD de Fz."
+    )
+    print(
+        "  - El modelo gait2392 se escala con las medidas de "
+        "subject-info.csv (altura, masa, muslo, pierna, pie)."
+    )
+    print(
+        "  - El .mot se genera deformando una marcha de referencia "
+        "de OpenSim con los contactos y despegues detectados."
+    )
+    print(
+        "  - OpenSim (AnalyzeTool) calcula la cinemática del modelo "
+        "personalizado."
+    )
+    print(
+        "  - Se compara con los ángulos medidos por los IMU (Xsens): "
+        "eventos, frecuencia, correlación y RMSE."
+    )
+
+    resultados_opensim, figuras_opensim = (
+        OpenSim_Marcha.integrar_opensim(
+            sujeto_id,
+            dict_fz_corregido,
+            dict_eventos
+        )
+    )
+
+    for fig in figuras_opensim:
+        Reporte.agregar_figura(fig)
 
     # ==========================================================
     # EXPORTACION DEL PDF
