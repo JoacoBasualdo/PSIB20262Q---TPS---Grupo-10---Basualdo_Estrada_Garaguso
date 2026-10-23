@@ -1,0 +1,13 @@
+\babel@toc {spanish}{}\relax 
+\contentsline {section}{\numberline {1}Introducción}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Marco Teórico}{3}{subsection.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.1}Marcha}{3}{subsubsection.1.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.2}EEG}{4}{subsubsection.1.1.2}%
+\contentsline {subsection}{\numberline {1.2}Estado del arte}{4}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Objetivos}{5}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Materiales y Métodos}{5}{section.2}%
+\contentsline {subsection}{\numberline {2.1}OpenSIM}{5}{subsection.2.1}%
+\contentsline {section}{\numberline {3}Resultados}{6}{section.3}%
+\contentsline {section}{\numberline {4}Conclusiones}{6}{section.4}%
+\contentsline {section}{\numberline {5}Bibliografía}{6}{section.5}%
+\contentsline {section}{\numberline {6}Anexo}{6}{section.6}%

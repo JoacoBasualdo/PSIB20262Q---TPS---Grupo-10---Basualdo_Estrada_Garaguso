@@ -19,26 +19,87 @@ def atenuacion_en(coeficientes, sfreq, frecuencia):
     return atenuacion_simple, 2 * atenuacion_simple
 
 #Grafica respuesta en frecuencia
-def graficar_respuesta_filtro(coeficientes, sfreq, frecuencia_corte, titulo):
-    frecuencias, respuesta = freqz(coeficientes, worN=16384, fs=sfreq)
-    frecuencias, respuesta = frecuencias[1:], respuesta[1:]
-    magnitud_db = 20 * np.log10(np.maximum(np.abs(respuesta), 1e-12))
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8.27, 8))
-    ax1.semilogx(frecuencias, magnitud_db, linewidth=0.8, label="Filtro diseñado")
-    ax1.semilogx(frecuencias, 2 * magnitud_db, "--", linewidth=0.8, label="Aplicado con filtfilt (fase cero)")
-    ax1.axvline(frecuencia_corte, color="gray", linestyle=":", label=f"Corte ({frecuencia_corte} Hz)")
-    ax1.axvline(50, color="tab:red", linestyle=":", label="Red eléctrica (50 Hz)")
+def graficar_respuesta_filtro(
+        coeficientes, sfreq, frecuencia_corte, titulo):
+
+    frecuencias, respuesta = freqz(
+        coeficientes, worN=16384, fs=sfreq
+    )
+
+    frecuencias = frecuencias[1:]
+    respuesta = respuesta[1:]
+
+    magnitud_db = 20 * np.log10(
+        np.maximum(np.abs(respuesta), 1e-12)
+    )
+
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1, figsize=(8.27, 8)
+    )
+
+    # Respuesta en frecuencia
+    ax1.semilogx(
+        frecuencias,
+        magnitud_db,
+        linewidth=0.8,
+        label="Filtro diseñado"
+    )
+
+    ax1.semilogx(
+        frecuencias,
+        2 * magnitud_db,
+        "--",
+        linewidth=0.8,
+        label="Aplicado con filtfilt (fase cero)"
+    )
+
+    ax1.axvline(
+        frecuencia_corte,
+        color="gray",
+        linestyle=":",
+        label=f"Corte ({frecuencia_corte} Hz)"
+    )
+
+    ax1.axvline(
+        50,
+        color="tab:red",
+        linestyle=":",
+        label="Red eléctrica (50 Hz)"
+    )
+
+    # Identificamos la banda gamma baja
+    ax1.axvspan(
+        24,
+        40,
+        color="tab:purple",
+        alpha=0.12,
+        label="Gamma baja (24-40 Hz)"
+    )
+
     ax1.set_ylim(-120, 5)
     ax1.set_xlim(0.1, sfreq / 2)
+
     ax1.set_xlabel("Frecuencia (Hz, escala logarítmica)")
     ax1.set_ylabel("Magnitud (dB)")
     ax1.set_title("Respuesta en frecuencia")
+
     ax1.legend(fontsize=8)
     ax1.grid(alpha=0.3, which="both")
 
-    tiempo = (np.arange(len(coeficientes)) - len(coeficientes) // 2) / sfreq
-    ax2.plot(tiempo, coeficientes, color="black", linewidth=0.8)
+    # Respuesta al impulso
+    tiempo = (
+        np.arange(len(coeficientes)) -
+        len(coeficientes) // 2
+    ) / sfreq
+
+    ax2.plot(
+        tiempo,
+        coeficientes,
+        color="black",
+        linewidth=0.8
+    )
+
     ax2.set_xlabel("Tiempo (s)")
     ax2.set_ylabel("Amplitud")
     ax2.set_title("Respuesta al impulso (coeficientes)")
@@ -46,6 +107,7 @@ def graficar_respuesta_filtro(coeficientes, sfreq, frecuencia_corte, titulo):
 
     fig.suptitle(titulo)
     fig.tight_layout()
+
     return fig
 
 # Aplica el filtro. La funcion filtfilt genera que no haya desfasaje temporal
@@ -190,31 +252,58 @@ def _ultimo_contacto(contactos, n_muestras):
     return np.maximum.accumulate(marcas)
  
 # Le asigna una base a cada instante e imprime qué porcentaje del ciclo ocupa cada fase
-def etiquetar_fases(dict_eventos, pie_referencia="Derecha", otro_pie="Izquierda"):
+def etiquetar_fases(dict_eventos, pie_referencia="Derecha", otro_pie="Izquierda",
+                    primer_ciclo=2):
+
+    if primer_ciclo < 1:
+        raise ValueError("primer_ciclo debe ser mayor o igual a 1")
+
     dict_fases = {}
     print(f"  {'Velocidad':<12}" + "".join(f"{fase:>22}" for fase in FASES))
+
     for vel, eventos in dict_eventos.items():
         n_muestras = len(eventos["tiempo"])
         referencia = eventos["estados"][pie_referencia]
         otro = eventos["estados"][otro_pie]
-        ultimo_referencia = _ultimo_contacto(eventos["contactos"][pie_referencia], n_muestras)
-        ultimo_otro = _ultimo_contacto(eventos["contactos"][otro_pie], n_muestras)
- 
+
+        ultimo_referencia = _ultimo_contacto(
+            eventos["contactos"][pie_referencia], n_muestras
+        )
+        ultimo_otro = _ultimo_contacto(
+            eventos["contactos"][otro_pie], n_muestras
+        )
+
         fases = np.full(n_muestras, -1)
         doble_apoyo = referencia & otro
+
         fases[doble_apoyo & (ultimo_referencia > ultimo_otro)] = 0
         fases[referencia & ~otro] = 1
         fases[doble_apoyo & (ultimo_otro > ultimo_referencia)] = 2
         fases[~referencia & otro] = 3
-        fases[:eventos["contactos"][pie_referencia][0]] = -1
-        fases[eventos["contactos"][pie_referencia][-1]:] = -1
- 
+
+        # Excluimos el primer ciclo completo de marcha
+        contactos_ref = eventos["contactos"][pie_referencia]
+
+        if len(contactos_ref) < primer_ciclo:
+            print(f"  {vel} m/s: no hay contactos suficientes para empezar en el ciclo {primer_ciclo}")
+            fases[:] = -1
+        else:
+            fases[:contactos_ref[primer_ciclo - 1]] = -1
+            fases[contactos_ref[-1]:] = -1
+
         validas = fases >= 0
         fila = f"  {vel + ' m/s':<12}"
+
         for i in range(len(FASES)):
-            fila += f"{100 * np.mean(fases[validas] == i):>21.1f}%"
+            porcentaje_fase = (
+                100 * np.mean(fases[validas] == i)
+                if validas.any() else float("nan")
+            )
+            fila += f"{porcentaje_fase:>21.1f}%"
+
         print(fila)
         dict_fases[vel] = fases
+
     return dict_fases
  
  
@@ -278,45 +367,94 @@ def alinear_fases_eeg(dict_eeg, dict_fases, desfase=0.0, fs_fp=FS_FP):
     return dict_fases_eeg
  
 # Se inicia la segmentacion en los contactos del talon derecho. Se descartan ciclos que duran mucho mas o mucho menos. Se cortan los EEG en ciclos y los deja a todos del mismo tamaño. Se normaliza los EEG para poder realizar un analisis comparativo
-def segmentar_ciclos(dict_eeg, dict_eventos, dict_fases, pie="Derecha", tolerancia=0.3,
-                     desfase=0.0, fs_fp=FS_FP):
+def segmentar_ciclos(dict_eeg, dict_eventos, dict_fases, pie="Derecha",
+                     tolerancia=0.3, desfase=0.0, fs_fp=FS_FP,
+                     primer_ciclo=2):
+
+    if primer_ciclo < 1:
+        raise ValueError("primer_ciclo debe ser mayor o igual a 1")
+
     dict_ciclos = {}
+
+    print(f"  Se empieza desde el ciclo completo N.º {primer_ciclo} (pie {pie})")
     print(f"  {'Velocidad':<12}{'Ciclos':>8}{'Descartados':>13}{'Mediana (s)':>13}{'Puntos':>8}")
+
     for vel, eventos in dict_eventos.items():
         if vel not in dict_eeg:
             continue
+
         raw = dict_eeg[vel]
         sfreq = raw.info["sfreq"]
         datos = raw.get_data(picks="eeg") * 1e6
         canales = raw.copy().pick("eeg").ch_names
         fases = dict_fases[vel]
- 
+
         contactos = eventos["tiempo"][eventos["contactos"][pie]] + desfase
-        mediana = np.median(np.diff(contactos))
-        n_puntos = int(round(mediana * sfreq))
+
+        if len(contactos) <= primer_ciclo:
+            print(f"  {vel} m/s: faltan contactos para el ciclo N.º {primer_ciclo}")
+            continue
+
+        # Excluimos el primer ciclo completo
+        inicio = primer_ciclo - 1
+
+        mediana = np.median(np.diff(contactos)[inicio:])
+        n_puntos = max(2, int(round(mediana * sfreq)))
         porcentaje = np.linspace(0, 100, n_puntos)
- 
-        ciclos, fases_ciclos, descartados = [], [], 0
-        for t0, t1 in zip(contactos[:-1], contactos[1:]):
-            i0, i1 = int(round(t0 * sfreq)), int(round(t1 * sfreq))
+
+        ciclos = []
+        fases_ciclos = []
+        intervalos = []
+        descartados = 0
+
+        # Se comienza desde el segundo contacto del talón derecho
+        for t0, t1 in zip(contactos[inicio:-1], contactos[inicio + 1:]):
+
+            i0 = int(round(t0 * sfreq))
+            i1 = int(round(t1 * sfreq))
+
             fuera_del_registro = i0 < 0 or i1 > datos.shape[1]
             atipico = abs((t1 - t0) - mediana) > tolerancia * mediana
-            if fuera_del_registro or atipico:
+
+            if fuera_del_registro or atipico or (i1 - i0) < 2:
                 descartados += 1
                 continue
- 
+
             segmento = datos[:, i0:i1]
             porcentaje_original = np.linspace(0, 100, segmento.shape[1])
-            ciclos.append(np.array([np.interp(porcentaje, porcentaje_original, canal)
-                                    for canal in segmento]))
- 
+
+            ciclos.append(np.array([
+                np.interp(porcentaje, porcentaje_original, canal)
+                for canal in segmento
+            ]))
+
             tiempos_fp = t0 + porcentaje / 100 * (t1 - t0) - desfase
-            indices_fp = np.clip(np.round(tiempos_fp * fs_fp).astype(int), 0, len(fases) - 1)
+            indices_fp = np.clip(
+                np.round(tiempos_fp * fs_fp).astype(int),
+                0, len(fases) - 1
+            )
+
             fases_ciclos.append(fases[indices_fp])
- 
-        dict_ciclos[vel] = {"datos": np.array(ciclos), "fases": np.array(fases_ciclos),
-                            "canales": canales, "porcentaje": porcentaje}
-        print(f"  {vel + ' m/s':<12}{len(ciclos):>8}{descartados:>13}{mediana:>13.2f}{n_puntos:>8}")
+
+            # Guardamos los tiempos originales para el análisis Morlet
+            intervalos.append((t0, t1))
+
+        if not ciclos:
+            print(f"  {vel} m/s: no quedaron ciclos válidos")
+            continue
+
+        dict_ciclos[vel] = {
+            "datos": np.array(ciclos),
+            "fases": np.array(fases_ciclos),
+            "canales": canales,
+            "porcentaje": porcentaje,
+            "intervalos": np.array(intervalos),
+            "primer_ciclo": primer_ciclo,
+        }
+
+        print(f"  {vel + ' m/s':<12}{len(ciclos):>8}{descartados:>13}"
+              f"{mediana:>13.2f}{n_puntos:>8}")
+
     return dict_ciclos
  
 # Arma en funcion de todos los datos como es un ciclo típico de esa persona.  
