@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 from scipy.interpolate import interp1d
 from mne.time_frequency import tfr_array_morlet
-
 from .Analisis_Espectral import COLORES_BANDAS
 
 
