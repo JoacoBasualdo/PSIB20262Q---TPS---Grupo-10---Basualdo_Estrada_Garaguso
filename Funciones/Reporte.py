@@ -40,6 +40,22 @@ def iniciar_registro():
     sys.stdout = _Duplicador()
 
 
+def cambiar_consola(salida):
+    global _consola
+    anterior = _consola
+    _consola = salida
+    return anterior
+
+
+def finalizar_registro():
+    _cerrar_texto()
+    sys.stdout = _consola
+
+
+def obtener_elementos():
+    return list(_elementos)
+
+
 def agregar_subtitulo(texto):
     _cerrar_texto()
     _elementos.append(("subtitulo", texto))

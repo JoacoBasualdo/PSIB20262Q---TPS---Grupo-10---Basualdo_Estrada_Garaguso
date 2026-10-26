@@ -81,3 +81,42 @@ def cargar_fp_paciente(sujeto_id, ruta_base=os.path.join(RAIZ_PROYECTO, "Dataset
         return os.path.join(ruta_base, f"FP_S{sujeto_id}_{sufijos[vel]}.csv")
  
     return _cargar_por_velocidad("FP", sujeto_id, construir_ruta, pd.read_csv)
+
+
+def listar_pacientes(ruta_dataset=os.path.join(RAIZ_PROYECTO, "Dataset")):
+    carpeta_eeg = os.path.join(ruta_dataset, "EEG")
+    if not os.path.isdir(carpeta_eeg):
+        return {}
+ 
+    con_antropometria = set()
+    ruta_info = os.path.join(ruta_dataset, "subject-info.csv")
+    if os.path.exists(ruta_info):
+        info = pd.read_csv(ruta_info)
+        info.columns = [c.strip() for c in info.columns]
+        con_antropometria = set(info["Subject"].astype(str).str.strip())
+ 
+    pacientes = {}
+    for carpeta in os.listdir(carpeta_eeg):
+        if not (carpeta.startswith("S") and carpeta[1:].isdigit()):
+            continue
+        sujeto_id = carpeta[1:]
+ 
+        velocidades = []
+        velocidades_con_imu = []
+        for vel in VELOCIDADES:
+            ruta_eeg = os.path.join(carpeta_eeg, carpeta, f"S{sujeto_id}_{vel}_raw.edf")
+            ruta_fp = os.path.join(ruta_dataset, "FP", f"FP_S{sujeto_id}_{vel}.csv")
+            ruta_imu = os.path.join(ruta_dataset, "IMU", f"IMU_S{sujeto_id}_{vel}")
+            if os.path.exists(ruta_eeg) and os.path.exists(ruta_fp):
+                velocidades.append(vel)
+                if os.path.isdir(ruta_imu):
+                    velocidades_con_imu.append(vel)
+ 
+        if velocidades:
+            pacientes[sujeto_id] = {
+                "velocidades": velocidades,
+                "imu": velocidades_con_imu,
+                "antropometria": carpeta in con_antropometria,
+            }
+ 
+    return dict(sorted(pacientes.items(), key=lambda item: int(item[0])))

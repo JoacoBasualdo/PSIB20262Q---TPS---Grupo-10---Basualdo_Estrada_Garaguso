@@ -24,9 +24,24 @@ env/
 # Archivos ocultos del sistema operativo
 .DS_Store
 Thumbs.db
-# OpenSim: la plantilla y los modelos se versionan; los .sto de resultados no
+
+# OpenSim: la plantilla y los modelos se versionan; los resultados no
 !OpenSim/Modelos/*.csv
 OpenSim/**/*.sto
+OpenSim/S*/
+*.log
+
+# Resultados generados por el programa
+resultados.pdf
+
+# Archivos auxiliares de LaTeX
+*.aux
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.toc
+
 # Archivos comprimidos del dataset
 *.tar.gz
 *.zip
