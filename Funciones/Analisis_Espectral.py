@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib.colors import TwoSlopeNorm
 from scipy.interpolate import interp1d
-from mne.time_frequency import tfr_array_morlet
+from scipy.signal import stft
 
 from .Procesamiento import FASES, COLORES_FASES
 
@@ -16,13 +16,13 @@ from .Procesamiento import FASES, COLORES_FASES
 BANDAS = {
     "Mu (8-13 Hz)": (8, 13),
     "Beta (13-30 Hz)": (13, 30),
-    "Gamma baja (24-40 Hz)": (24, 40)
+    "Gamma baja (24-40 Hz)": (24, 40),
 }
 
 COLORES_BANDAS = {
     "Mu (8-13 Hz)": "tab:blue",
     "Beta (13-30 Hz)": "tab:orange",
-    "Gamma baja (24-40 Hz)": "tab:green"
+    "Gamma baja (24-40 Hz)": "tab:green",
 }
 
 
@@ -30,8 +30,8 @@ COLORES_BANDAS = {
 # FUNCIONES AUXILIARES
 # ==========================================================
 
-# Calcula la fase mas frecuente en cada punto del ciclo
 def _fases_comunes(fases_por_ciclo):
+    """Determina la fase mas frecuente en cada punto del ciclo."""
 
     return np.array([
         np.bincount(
@@ -42,7 +42,6 @@ def _fases_comunes(fases_por_ciclo):
     ])
 
 
-# Sombrea las fases de marcha
 def _sombrear_fases(ax, porcentaje, fases):
 
     limites = np.r_[
@@ -51,24 +50,29 @@ def _sombrear_fases(ax, porcentaje, fases):
         len(fases)
     ]
 
-    for i0, i1 in zip(limites[:-1], limites[1:]):
+    for a, b in zip(limites[:-1], limites[1:]):
 
-        if fases[i0] >= 0:
+        if 0 <= fases[a] < len(FASES):
+
+            fin = (
+                porcentaje[b]
+                if b < len(porcentaje)
+                else 100.0
+            )
+
             ax.axvspan(
-                porcentaje[i0],
-                porcentaje[i1 - 1],
-                color=COLORES_FASES[fases[i0]],
+                porcentaje[a],
+                fin,
+                color=COLORES_FASES[fases[a]],
                 alpha=0.15,
                 linewidth=0
             )
 
 
-# Marca los cambios entre fases
 def _lineas_fases(ax, porcentaje, fases):
 
-    cambios = np.flatnonzero(np.diff(fases)) + 1
+    for i in np.flatnonzero(np.diff(fases)) + 1:
 
-    for i in cambios:
         ax.axvline(
             porcentaje[i],
             color="black",
@@ -79,96 +83,256 @@ def _lineas_fases(ax, porcentaje, fases):
 
 
 # ==========================================================
-# ANALISIS TIEMPO-FRECUENCIA: MORLET
+# TRANSFORMADA DE FOURIER DE TIEMPO CORTO (STFT)
+# ==========================================================
+
+def calcular_stft_continua(
+        eeg_microvoltios,
+        sfreq,
+        fmin=8.0,
+        fmax=40.0,
+        paso=1.0,
+        ventana_s=0.5,
+        solapamiento=0.90):
+
+    """
+    Calcula la STFT compleja sobre el EEG continuo.
+
+    Entrada:
+        EEG con dimensiones:
+        canales x muestras.
+
+    Salida:
+        frecuencias
+        tiempos
+        STFT compleja:
+        canales x frecuencias x ventanas.
+
+    Se utiliza ventana Hann de 0.5 segundos y
+    solapamiento del 90%.
+
+    La resolucion frecuencial efectiva depende
+    de la duracion de la ventana.
+
+    El zero-padding permite una grilla mas densa,
+    pero no aumenta la resolucion real.
+    """
+
+    x = np.asarray(
+        eeg_microvoltios,
+        dtype=float
+    )
+
+    if (
+        x.ndim != 2
+        or x.shape[0] < 1
+        or not np.isfinite(x).all()
+    ):
+        raise ValueError(
+            "El EEG debe tener dimensiones "
+            "canales x muestras y valores finitos."
+        )
+
+    if not (
+        ventana_s > 0
+        and 0 <= solapamiento < 1
+    ):
+        raise ValueError(
+            "Ventana o solapamiento STFT invalidos."
+        )
+
+    if not (
+        0 < paso
+        and 0 <= fmin < fmax < sfreq / 2
+    ):
+        raise ValueError(
+            "Rango de frecuencias STFT invalido."
+        )
+
+    # Cantidad de muestras de cada ventana
+    nperseg = int(round(ventana_s * sfreq))
+
+    if (
+        nperseg < 4
+        or nperseg > x.shape[1]
+    ):
+        raise ValueError(
+            "La ventana STFT no cabe en el registro."
+        )
+
+    # Solapamiento entre ventanas
+    noverlap = min(
+        int(round(nperseg * solapamiento)),
+        nperseg - 1
+    )
+
+    # Cantidad de puntos para la FFT
+    nfft = max(
+        nperseg,
+        int(round(sfreq / paso))
+    )
+
+    # Calculo de STFT
+    frecuencias, tiempos, zxx = stft(
+        x,
+        fs=sfreq,
+        window="hann",
+        nperseg=nperseg,
+        noverlap=noverlap,
+        nfft=nfft,
+        detrend="constant",
+        return_onesided=True,
+        boundary="zeros",
+        padded=True,
+        axis=-1
+    )
+
+    # Seleccionamos las frecuencias de interes
+    seleccion = (
+        (frecuencias >= fmin - 1e-8)
+        & (frecuencias <= fmax + 1e-8)
+    )
+
+    if not np.any(seleccion):
+        raise ValueError(
+            "La STFT no contiene frecuencias "
+            "en el rango solicitado."
+        )
+
+    return (
+        frecuencias[seleccion],
+        tiempos,
+        zxx[:, seleccion, :]
+    )
+
+
+# ==========================================================
+# ANALISIS TIEMPO-FRECUENCIA
 # ==========================================================
 
 def analizar_tiempo_frecuencia(
         dict_eeg,
         dict_ciclos,
-        canales=("C3", "Cz", "C4"),
+        canales=("C3", "Cz", "C4", "P3", "Pz", "P4"),
         fmin=8.0,
         fmax=40.0,
         paso=1.0,
-        n_ciclos_wavelet=4.0,
+        ventana_s=0.5,
+        solapamiento=0.90,
         n_puntos=101):
 
-    frecuencias = np.arange(
-        fmin, fmax + 0.5 * paso, paso
-    )
+    """
+    Analiza la potencia espectral durante la marcha
+    mediante STFT.
+
+    Procedimiento:
+
+    1. Calcular STFT del EEG filtrado continuo.
+    2. Obtener potencia como |STFT|^2.
+    3. Extraer los ciclos validos.
+    4. Normalizar cada ciclo al 0-100%.
+    5. Calcular potencia relativa.
+    6. Analizar las bandas mu, beta y gamma.
+    7. Asociar las potencias a las fases.
+
+    La referencia es la potencia media durante
+    la marcha, no la bipedestacion estatica.
+    """
 
     resultados = {}
 
+    porcentaje = np.linspace(
+        0, 100, n_puntos
+    )
+
     for vel, ciclos in dict_ciclos.items():
 
-        if vel not in dict_eeg or len(ciclos["intervalos"]) == 0:
+        if (
+            vel not in dict_eeg
+            or not len(ciclos.get("intervalos", []))
+        ):
             continue
 
-        raw = dict_eeg[vel].copy().pick(list(canales))
-        sfreq = raw.info["sfreq"]
+        if len(ciclos["intervalos"]) != len(ciclos["fases"]):
+            raise ValueError(
+                f"{vel} m/s: no coinciden intervalos y fases."
+            )
 
-        print(
-            f"  {vel} m/s: Morlet en {', '.join(raw.ch_names)}, "
-            f"{len(frecuencias)} frecuencias "
-            f"({fmin:g}-{fmax:g} Hz)"
+        raw = dict_eeg[vel].copy().pick(
+            list(canales)
         )
 
+        sfreq = float(raw.info["sfreq"])
+
         # EEG continuo en microvoltios
-        eeg_continuo = raw.get_data()[None, :, :] * 1e6
+        eeg = raw.get_data() * 1e6
 
-        # Potencia tiempo-frecuencia mediante Morlet
-        potencia_continua = tfr_array_morlet(
-            eeg_continuo,
-            sfreq=sfreq,
-            freqs=frecuencias,
-            n_cycles=n_ciclos_wavelet,
-            output="power",
-            zero_mean=True,
-            n_jobs=1,
-            verbose=False
-        )[0]
+        # ==================================================
+        # PASO 1: CALCULAR STFT
+        # ==================================================
 
-        # Dimensiones: canales x frecuencias x muestras
-        porcentaje = np.linspace(0, 100, n_puntos)
+        frecuencias, tiempos_stft, zxx = (
+            calcular_stft_continua(
+                eeg,
+                sfreq,
+                fmin=fmin,
+                fmax=fmax,
+                paso=paso,
+                ventana_s=ventana_s,
+                solapamiento=solapamiento
+            )
+        )
 
-        mapas_ciclos = []
-        fases_ciclos = []
-        intervalos_validos = []
+        # Potencia espectral
+        potencia = np.abs(zxx) ** 2
 
-        # Recorremos los ciclos validos del analisis previo
+        del zxx, eeg
+
+        # Interpolador temporal
+        interpolar = interp1d(
+            tiempos_stft,
+            potencia,
+            axis=-1,
+            kind="linear",
+            bounds_error=True,
+            assume_sorted=True
+        )
+
+        mapas = []
+        fases_por_ciclo = []
+        intervalos = []
+
+        # ==================================================
+        # PASO 2: EXTRAER CICLOS VALIDOS
+        # ==================================================
+
         for (t0, t1), fases_originales in zip(
-                ciclos["intervalos"], ciclos["fases"]):
-
-            i0 = int(round(t0 * sfreq))
-            i1 = int(round(t1 * sfreq))
+            ciclos["intervalos"],
+            ciclos["fases"]
+        ):
 
             if (
-                i0 < 0
-                or i1 > potencia_continua.shape[-1]
-                or i1 - i0 < 2
+                t0 < 0
+                or t1 <= t0
+                or t1 > raw.n_times / sfreq
             ):
                 raise ValueError(
-                    f"El intervalo [{t0}, {t1}] s queda fuera del EEG"
+                    f"{vel}: intervalo EEG invalido "
+                    f"{t0:.3f}-{t1:.3f} s."
                 )
 
-            # Normalizacion temporal del mapa de potencia
-            porcentaje_original = np.linspace(
-                0, 100, i1 - i0
+            # Normalizacion temporal del ciclo
+            t_normalizado = (
+                t0
+                + (t1 - t0) * porcentaje / 100.0
             )
 
-            remuestreador = interp1d(
-                porcentaje_original,
-                potencia_continua[:, :, i0:i1],
-                axis=-1,
-                kind="linear",
-                assume_sorted=True
+            mapas.append(
+                interpolar(t_normalizado)
             )
 
-            mapas_ciclos.append(
-                remuestreador(porcentaje)
-            )
-
-            # Asignacion de las fases de marcha
-            i_fases = np.rint(
+            # Remuestreo de las fases
+            indices = np.rint(
                 np.linspace(
                     0,
                     len(fases_originales) - 1,
@@ -176,104 +340,125 @@ def analizar_tiempo_frecuencia(
                 )
             ).astype(int)
 
-            fases_ciclos.append(
-                fases_originales[i_fases]
+            fases_por_ciclo.append(
+                np.asarray(fases_originales)[indices]
             )
 
-            intervalos_validos.append((t0, t1))
+            intervalos.append((t0, t1))
 
-        mapas_ciclos = np.asarray(mapas_ciclos)
-        fases_ciclos = np.asarray(fases_ciclos)
+        # Dimensiones:
+        # ciclos x canales x frecuencias x puntos
+        mapas = np.asarray(
+            mapas,
+            dtype=float
+        )
 
-        # Promedio de potencia entre ciclos
-        mapa_promedio = mapas_ciclos.mean(axis=0)
+        fases_por_ciclo = np.asarray(
+            fases_por_ciclo
+        )
 
-        # Potencia de referencia: media durante la marcha
-        referencia_espectral = mapa_promedio.mean(
+        # ==================================================
+        # PASO 3: POTENCIA RELATIVA
+        # ==================================================
+
+        mapa_promedio = mapas.mean(axis=0)
+
+        referencia = mapa_promedio.mean(
             axis=-1,
             keepdims=True
         )
 
         mapa_relativo = 100 * (
-            mapa_promedio /
-            np.maximum(referencia_espectral, 1e-20) - 1
+            mapa_promedio
+            / np.maximum(referencia, 1e-20)
+            - 1
         )
 
         # ==================================================
-        # POTENCIA EN MU, BETA Y GAMMA BAJA
+        # PASO 4: POTENCIA POR BANDAS
         # ==================================================
 
         bandas = {}
 
-        for nombre, (f_baja, f_alta) in BANDAS.items():
+        for nombre, (inferior, superior) in BANDAS.items():
 
-            # Gamma baja incluye la frecuencia de 40 Hz
-            if nombre == "Gamma baja (24-40 Hz)":
-                mask = (
-                    (frecuencias >= f_baja)
-                    & (frecuencias <= f_alta)
-                )
-            else:
-                mask = (
-                    (frecuencias >= f_baja)
-                    & (frecuencias < f_alta)
-                )
+            incluir_superior = nombre.startswith("Gamma")
 
-            if not np.any(mask):
+            mascara = (
+                (frecuencias >= inferior)
+                & (
+                    (frecuencias <= superior)
+                    if incluir_superior
+                    else (frecuencias < superior)
+                )
+            )
+
+            if not mascara.any():
                 raise ValueError(
-                    f"La resolucion no cubre la banda {nombre}"
+                    f"La STFT no cubre la banda {nombre}."
                 )
 
-            # Potencia promedio de cada banda para cada ciclo
-            potencia_banda_ciclos = mapas_ciclos[
-                :, :, mask, :
+            potencia_banda = mapas[
+                :, :, mascara, :
             ].mean(axis=2)
 
-            # Potencia de referencia de cada banda
-            ref_banda = potencia_banda_ciclos.mean(
+            referencia_banda = potencia_banda.mean(
                 axis=(0, 2),
                 keepdims=True
             )
 
-            # Cambio porcentual respecto de la referencia
-            potencia_banda_relativa = 100 * (
-                potencia_banda_ciclos /
-                np.maximum(ref_banda, 1e-20) - 1
+            relativa = 100 * (
+                potencia_banda
+                / np.maximum(referencia_banda, 1e-20)
+                - 1
             )
 
             bandas[nombre] = {
-                "por_ciclo": potencia_banda_relativa,
-                "media": potencia_banda_relativa.mean(axis=0),
-                "desvio": potencia_banda_relativa.std(axis=0),
-                "absoluta_por_ciclo": potencia_banda_ciclos
+                "por_ciclo": relativa,
+                "media": relativa.mean(axis=0),
+                "desvio": relativa.std(axis=0),
+                "absoluta_por_ciclo": potencia_banda
             }
 
-        # Guardamos los resultados
+        # ==================================================
+        # PASO 5: GUARDAR RESULTADOS
+        # ==================================================
+
         resultados[vel] = {
             "canales": raw.ch_names,
             "frecuencias": frecuencias,
             "porcentaje": porcentaje,
             "potencia_promedio": mapa_promedio,
             "potencia_relativa": mapa_relativo,
-            "fases_ciclos": fases_ciclos,
-            "fases_comunes": _fases_comunes(fases_ciclos),
-            "intervalos": np.asarray(intervalos_validos),
+            "fases_ciclos": fases_por_ciclo,
+            "fases_comunes": _fases_comunes(
+                fases_por_ciclo
+            ),
+            "intervalos": np.asarray(intervalos),
             "bandas": bandas,
-            "n_ciclos": len(mapas_ciclos)
+            "n_ciclos": len(mapas),
+            "metodo": "STFT",
+            "ventana_s": ventana_s,
+            "solapamiento": solapamiento
         }
 
+        salto = (
+            tiempos_stft[1] - tiempos_stft[0]
+        )
+
         print(
-            f"    Se analizaron {len(mapas_ciclos)} ciclos validos; "
-            f"primer intervalo: "
-            f"{intervalos_validos[0][0]:.3f}-"
-            f"{intervalos_validos[0][1]:.3f} s"
+            f"  {vel} m/s: STFT de "
+            f"{len(raw.ch_names)} canales, "
+            f"{len(frecuencias)} frecuencias, "
+            f"salto {salto:.3f} s, "
+            f"{len(mapas)} ciclos."
         )
 
     return resultados
 
 
 # ==========================================================
-# FIGURA A: MAPAS TIEMPO-FRECUENCIA
+# FIGURA A: ESPECTROGRAMAS STFT
 # ==========================================================
 
 def graficar_mapas_tiempo_frecuencia(resultados):
@@ -282,59 +467,59 @@ def graficar_mapas_tiempo_frecuencia(resultados):
 
     for vel, res in resultados.items():
 
-        porcentaje = res["porcentaje"]
-        frecuencias = res["frecuencias"]
-        canales = res["canales"]
         mapas = res["potencia_relativa"]
 
-        limite = max(30, np.percentile(mapas, 98))
-
-        norma_color = TwoSlopeNorm(
-            vmin=-100,
-            vcenter=0,
-            vmax=limite
+        limite = max(
+            30,
+            float(np.percentile(mapas, 98))
         )
 
         fig, ejes = plt.subplots(
-            len(canales),
+            len(res["canales"]),
             1,
-            figsize=(8.27, 9),
+            figsize=(8.27, 10),
             sharex=True,
             constrained_layout=True
         )
 
         ejes = np.atleast_1d(ejes)
 
-        for i, (ax, canal) in enumerate(zip(ejes, canales)):
+        for i, (ax, canal) in enumerate(
+            zip(ejes, res["canales"])
+        ):
 
             img = ax.pcolormesh(
-                porcentaje,
-                frecuencias,
+                res["porcentaje"],
+                res["frecuencias"],
                 mapas[i],
                 shading="auto",
                 cmap="RdBu_r",
-                norm=norma_color
+                norm=TwoSlopeNorm(
+                    vmin=-100,
+                    vcenter=0,
+                    vmax=limite
+                )
             )
 
             _lineas_fases(
                 ax,
-                porcentaje,
+                res["porcentaje"],
                 res["fases_comunes"]
             )
 
             ax.set_ylabel(
-                f"{canal}\nFrecuencia (Hz)",
+                f"{canal}\nHz",
                 fontsize=9
             )
 
             ax.set_ylim(
-                frecuencias[0],
-                frecuencias[-1]
+                res["frecuencias"][0],
+                res["frecuencias"][-1]
             )
 
-            ax.tick_params(labelsize=8)
-
-        ejes[-1].set_xlabel("Ciclo de marcha (%)")
+        ejes[-1].set_xlabel(
+            "Ciclo de marcha (%)"
+        )
         ejes[-1].set_xlim(0, 100)
 
         fig.colorbar(
@@ -342,12 +527,13 @@ def graficar_mapas_tiempo_frecuencia(resultados):
             ax=ejes,
             shrink=0.7,
             pad=0.02,
-            label="Cambio respecto de la potencia media de marcha (%)"
+            label="Cambio frente a la potencia media de marcha (%)"
         )
 
         fig.suptitle(
-            f"Morlet: EEG durante el ciclo de marcha - {vel} m/s\n"
-            f"{res['n_ciclos']} ciclos desde el segundo ciclo completo",
+            f"STFT: espectrograma del ciclo de marcha "
+            f"- {vel} m/s\n"
+            f"{res['n_ciclos']} ciclos",
             fontsize=11
         )
 
@@ -357,7 +543,7 @@ def graficar_mapas_tiempo_frecuencia(resultados):
 
 
 # ==========================================================
-# FIGURA B: POTENCIA MU, BETA Y GAMMA BAJA
+# FIGURA B: POTENCIA MU, BETA Y GAMMA
 # ==========================================================
 
 def graficar_potencia_bandas(resultados):
@@ -369,7 +555,7 @@ def graficar_potencia_bandas(resultados):
         fig, ejes = plt.subplots(
             len(res["canales"]),
             1,
-            figsize=(8.27, 9),
+            figsize=(8.27, 10),
             sharex=True,
             constrained_layout=True
         )
@@ -377,37 +563,35 @@ def graficar_potencia_bandas(resultados):
         ejes = np.atleast_1d(ejes)
 
         for i, (ax, canal) in enumerate(
-                zip(ejes, res["canales"])):
+            zip(ejes, res["canales"])
+        ):
 
-            # Sombreamos las fases de marcha
             _sombrear_fases(
                 ax,
                 res["porcentaje"],
                 res["fases_comunes"]
             )
 
-            # Graficamos las tres bandas
             for nombre, datos in res["bandas"].items():
 
                 media = datos["media"][i]
                 desvio = datos["desvio"][i]
-                color = COLORES_BANDAS[nombre]
 
                 ax.plot(
                     res["porcentaje"],
                     media,
+                    color=COLORES_BANDAS[nombre],
                     label=nombre,
-                    color=color,
-                    lw=1.4
+                    lw=1.2
                 )
 
                 ax.fill_between(
                     res["porcentaje"],
                     media - desvio,
                     media + desvio,
-                    color=color,
+                    color=COLORES_BANDAS[nombre],
                     alpha=0.12,
-                    linewidth=0
+                    lw=0
                 )
 
             ax.axhline(
@@ -421,21 +605,22 @@ def graficar_potencia_bandas(resultados):
                 f"{canal}\nCambio (%)",
                 fontsize=9
             )
-
-            ax.grid(alpha=0.15)
-            ax.tick_params(labelsize=8)
+            ax.grid(alpha=0.2)
 
         ejes[0].legend(
-            loc="upper right",
-            fontsize=8
+            fontsize=7,
+            loc="upper right"
         )
 
+        ejes[-1].set_xlabel(
+            "Ciclo de marcha (%)"
+        )
         ejes[-1].set_xlim(0, 100)
-        ejes[-1].set_xlabel("Ciclo de marcha (%)")
 
         fig.suptitle(
-            f"Potencia mu, beta y gamma baja durante la marcha - {vel} m/s\n"
-            f"Media ± desvio de {res['n_ciclos']} ciclos",
+            f"Potencia mu, beta y gamma baja (STFT) "
+            f"- {vel} m/s\n"
+            f"Media +/- DE de {res['n_ciclos']} ciclos",
             fontsize=11
         )
 
@@ -445,64 +630,60 @@ def graficar_potencia_bandas(resultados):
 
 
 # ==========================================================
-# TABLA DE POTENCIA RELATIVA POR FASE
+# RESUMEN DE POTENCIA POR FASE
 # ==========================================================
 
 def resumen_por_fase(resultados):
 
-    res_fases = {}
+    resumen = {}
 
     for vel, res in resultados.items():
 
         filas = []
 
         print(
-            f"  {vel} m/s: potencia relativa (%) por fase, "
-            "media ± DE entre ciclos"
+            f"  {vel} m/s: potencia relativa (%) "
+            "por fase, media +/- DE entre ciclos"
         )
 
-        print(
-            f"  {'Canal':<7}{'Banda':<24}"
-            f"{'Fase':<23}{'N':>5}{'Media':>12}{'DE':>12}"
-        )
+        for ic, canal in enumerate(res["canales"]):
 
-        for i, canal in enumerate(res["canales"]):
+            for nombre, datos in res["bandas"].items():
 
-            for nombre_banda, datos in res["bandas"].items():
-
-                por_ciclo = datos["por_ciclo"][:, i, :]
+                por_ciclo = datos["por_ciclo"][:, ic, :]
 
                 for idx_fase, fase in enumerate(FASES):
 
-                    # Potencia media en cada fase de cada ciclo
-                    promedios_ciclos = np.array([
+                    promedios = np.asarray([
                         por_ciclo[
-                            j,
-                            res["fases_ciclos"][j] == idx_fase
+                            k,
+                            res["fases_ciclos"][k] == idx_fase
                         ].mean()
 
-                        for j in range(res["n_ciclos"])
+                        for k in range(res["n_ciclos"])
 
                         if np.any(
-                            res["fases_ciclos"][j] == idx_fase
+                            res["fases_ciclos"][k] == idx_fase
                         )
                     ])
 
-                    n = len(promedios_ciclos)
+                    n = len(promedios)
 
                     media = (
-                        promedios_ciclos.mean()
-                        if n else np.nan
+                        float(promedios.mean())
+                        if n
+                        else float("nan")
                     )
 
                     de = (
-                        promedios_ciclos.std(ddof=1)
-                        if n > 1 else np.nan
+                        float(promedios.std(ddof=1))
+                        if n > 1
+                        else float("nan")
                     )
 
                     filas.append({
                         "canal": canal,
-                        "banda": nombre_banda,
+                        "banda": nombre,
                         "fase": fase,
                         "n": n,
                         "media": media,
@@ -510,18 +691,20 @@ def resumen_por_fase(resultados):
                     })
 
                     print(
-                        f"  {canal:<7}{nombre_banda:<24}"
-                        f"{fase:<23}{n:>5}"
-                        f"{media:>12.2f}{de:>12.2f}"
+                        f"    {canal:3} | "
+                        f"{nombre:23} | "
+                        f"{fase:21} | "
+                        f"N={n:2} | "
+                        f"{media:8.2f} +/- {de:7.2f}"
                     )
 
-        res_fases[vel] = filas
+        resumen[vel] = filas
 
-    return res_fases
+    return resumen
 
 
 # ==========================================================
-# FIGURA C: COMPARACION DE POTENCIA ENTRE FASES
+# FIGURA C: COMPARACION ENTRE FASES
 # ==========================================================
 
 def graficar_comparacion_fases(resumen):
@@ -532,14 +715,15 @@ def graficar_comparacion_fases(resumen):
 
         canales = list(
             dict.fromkeys(
-                x["canal"] for x in filas
+                fila["canal"]
+                for fila in filas
             )
         )
 
         fig, ejes = plt.subplots(
             len(canales),
             1,
-            figsize=(8.27, 9),
+            figsize=(8.27, 10),
             sharex=True,
             constrained_layout=True
         )
@@ -548,39 +732,45 @@ def graficar_comparacion_fases(resumen):
 
         x = np.arange(len(FASES))
 
-        # Ancho de las barras para tres bandas
-        n_bandas = len(BANDAS)
-        ancho = min(0.24, 0.8 / n_bandas)
+        ancho = min(
+            0.24,
+            0.8 / len(BANDAS)
+        )
 
-        for i, (ax, canal) in enumerate(
-                zip(ejes, canales)):
+        for ic, (ax, canal) in enumerate(
+            zip(ejes, canales)
+        ):
 
-            for j, nombre_banda in enumerate(BANDAS):
+            for ib, nombre in enumerate(BANDAS):
 
                 filas_banda = [
-                    z for z in filas
-                    if z["canal"] == canal
-                    and z["banda"] == nombre_banda
+                    fila
+                    for fila in filas
+                    if fila["canal"] == canal
+                    and fila["banda"] == nombre
                 ]
 
                 medias = [
-                    z["media"] for z in filas_banda
+                    fila["media"]
+                    for fila in filas_banda
                 ]
 
-                errores = [
-                    z["de"] for z in filas_banda
+                desvios = [
+                    fila["de"]
+                    for fila in filas_banda
                 ]
 
-                # Posicionamos las tres barras por fase
                 ax.bar(
-                    x + (j - (n_bandas - 1) / 2) * ancho,
+                    x + (
+                        ib - (len(BANDAS) - 1) / 2
+                    ) * ancho,
                     medias,
                     width=ancho,
-                    yerr=errores,
+                    yerr=desvios,
                     capsize=2,
-                    color=COLORES_BANDAS[nombre_banda],
-                    label=nombre_banda if i == 0 else None,
-                    alpha=0.8
+                    color=COLORES_BANDAS[nombre],
+                    alpha=0.8,
+                    label=nombre if ic == 0 else None
                 )
 
             ax.axhline(
@@ -594,7 +784,10 @@ def graficar_comparacion_fases(resumen):
                 fontsize=9
             )
 
-            ax.grid(axis="y", alpha=0.2)
+            ax.grid(
+                axis="y",
+                alpha=0.2
+            )
 
         ejes[-1].set_xticks(
             x,
@@ -610,15 +803,15 @@ def graficar_comparacion_fases(resumen):
             "Fase de marcha (pie derecho)"
         )
 
-        ejes[0].legend(fontsize=8)
+        ejes[0].legend(fontsize=7)
 
         fig.suptitle(
-            f"Cambio de potencia segun fase - {vel} m/s\n"
-            "Media ± desvio estandar de ciclos validos",
+            f"Potencia STFT por fase de marcha "
+            f"- {vel} m/s\n"
+            "Media +/- DE de ciclos validos",
             fontsize=11
         )
 
         figuras.append(fig)
 
     return figuras
-

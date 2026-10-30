@@ -1,13 +1,17 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.interpolate import interp1d
-from mne.time_frequency import tfr_array_morlet
-from .Analisis_Espectral import COLORES_BANDAS
+
+from .Analisis_Espectral import (
+    COLORES_BANDAS,
+    calcular_stft_continua
+)
 
 
 # ==========================================================
-# GPM Y PRUEBA ESTADISTICA
+# GPM Y PRUEBA ESTADISTICA CON STFT
 # ==========================================================
 
 def analizar_gpm_permutaciones(
@@ -17,50 +21,43 @@ def analizar_gpm_permutaciones(
         fmin=8.0,
         fmax=40.0,
         paso=1.0,
-        n_ciclos_wavelet=4.0,
+        ventana_s=0.5,
+        solapamiento=0.90,
         n_puntos=100,
         n_permutaciones=10000,
         semilla=42):
 
     """
-    Calcula GPM y significancia mediante permutaciones.
+    Analiza la modulacion de amplitud del EEG
+    sincronizada con el ciclo de marcha.
 
-    GPM:
-    - Se estudia la modulacion de amplitud del EEG.
-    - Se consideran dos periodos por ciclo de marcha.
-    - Se utiliza amplitud obtenida mediante Morlet.
+    Utiliza amplitudes espectrales obtenidas
+    mediante STFT.
 
-    Prueba estadistica:
-    - Desplazamientos circulares independientes por ciclo.
-    - Correccion max-T para multiples comparaciones.
-    - Nivel de significancia del 5%.
+    El GPM corresponde al segundo armonico del
+    ciclo completo, es decir, dos periodos de
+    modulacion por zancada.
 
-    Canales analizados:
+    La significancia se evalua mediante:
+        - Desplazamientos circulares por ciclo.
+        - 10000 permutaciones por defecto.
+        - Correccion max-T.
+        - FWER del 5%.
+
+    Se utilizan los seis canales:
     C3, Cz, C4, P3, Pz y P4.
 
-    Se realizan 198 comparaciones:
-    6 canales x 33 frecuencias.
-
-    Devuelve:
-        resultados: diccionario de resultados estadisticos.
-        figuras: una figura de GPM por velocidad.
+    La significancia estadistica no demuestra
+    por si sola un origen neuronal.
     """
 
-    if n_puntos < 10 or n_permutaciones < 1:
+    if (
+        n_puntos < 10
+        or n_permutaciones < 1
+    ):
         raise ValueError(
-            "n_puntos debe ser >= 10 y n_permutaciones >= 1"
+            "n_puntos >= 10 y n_permutaciones >= 1"
         )
-
-    if paso <= 0 or fmax <= fmin:
-        raise ValueError(
-            "La grilla de frecuencias debe ser creciente"
-        )
-
-    frecuencias = np.arange(
-        fmin,
-        fmax + paso / 2,
-        paso
-    )
 
     bandas = {
         "Mu (8-13 Hz)": (8, 13, False),
@@ -74,7 +71,7 @@ def analizar_gpm_permutaciones(
     figuras = []
 
     # ======================================================
-    # RECORRIDO POR VELOCIDAD
+    # ANALISIS POR VELOCIDAD
     # ======================================================
 
     for vel, info_ciclos in dict_ciclos.items():
@@ -85,85 +82,80 @@ def analizar_gpm_permutaciones(
         ):
             continue
 
-        raw = dict_eeg[vel].copy().pick(list(canales))
+        raw = dict_eeg[vel].copy().pick(
+            list(canales)
+        )
 
         sfreq = float(raw.info["sfreq"])
 
         # ==================================================
-        # PASO 1: TRANSFORMADA DE MORLET
+        # PASO 1: AMPLITUD MEDIANTE STFT
         # ==================================================
 
-        # EEG continuo en microvoltios
-        eeg = raw.get_data()[None, :, :] * 1e6
+        frecuencias, tiempos_stft, zxx = (
+            calcular_stft_continua(
+                raw.get_data() * 1e6,
+                sfreq,
+                fmin=fmin,
+                fmax=fmax,
+                paso=paso,
+                ventana_s=ventana_s,
+                solapamiento=solapamiento
+            )
+        )
 
-        # Transformada compleja
-        tf = tfr_array_morlet(
-            eeg,
-            sfreq=sfreq,
-            freqs=frecuencias,
-            n_cycles=n_ciclos_wavelet,
-            output="complex",
-            zero_mean=True,
-            n_jobs=1,
-            verbose=False
-        )[0]
+        # El GPM utiliza amplitud, no potencia
+        amplitud = np.abs(zxx)
 
-        # Para GPM usamos amplitud, no potencia
-        amplitud_continua = np.abs(tf)
+        del zxx
 
-        del tf, eeg
+        # Interpolador sobre tiempos de STFT
+        interpolador = interp1d(
+            tiempos_stft,
+            amplitud,
+            axis=-1,
+            kind="linear",
+            bounds_error=True,
+            assume_sorted=True
+        )
 
         # ==================================================
-        # PASO 2: SEGMENTACION EN CICLOS
+        # PASO 2: SEGMENTACION DE CICLOS
         # ==================================================
 
-        mapas = []
-
-        # No duplicamos el extremo del 100%
-        puntos_destino = (
+        porcentajes = (
             np.arange(n_puntos) / n_puntos
         )
 
+        mapas = []
+
         for t0, t1 in info_ciclos["intervalos"]:
 
-            i0 = int(round(t0 * sfreq))
-            i1 = int(round(t1 * sfreq))
-
             if (
-                i0 < 0
-                or i1 > amplitud_continua.shape[-1]
-                or i1 - i0 < 2
+                t0 < 0
+                or t1 <= t0
+                or t1 > raw.n_times / sfreq
             ):
                 raise ValueError(
-                    f"Intervalo EEG invalido: "
+                    f"{vel}: ciclo EEG invalido "
                     f"{t0:.3f}-{t1:.3f} s"
                 )
 
-            segmento = amplitud_continua[:, :, i0:i1]
-
-            x_origen = (
-                np.arange(i1 - i0) / (i1 - i0)
-            )
-
-            interpolar = interp1d(
-                x_origen,
-                segmento,
-                axis=-1,
-                kind="linear",
-                bounds_error=False,
-                fill_value="extrapolate"
+            instantes = (
+                t0
+                + (t1 - t0) * porcentajes
             )
 
             mapas.append(
-                interpolar(puntos_destino)
+                interpolador(instantes)
             )
 
+        # Dimensiones:
+        # ciclos x canales x frecuencias x puntos
         amp = np.asarray(
             mapas,
             dtype=np.float64
         )
-
-        del amplitud_continua
 
         n_ciclos, n_canales, n_frecuencias, _ = (
             amp.shape
@@ -171,29 +163,25 @@ def analizar_gpm_permutaciones(
 
         if n_ciclos < 3:
             raise ValueError(
-                "Se requieren al menos 3 ciclos validos"
+                f"{vel}: se requieren al menos "
+                "3 ciclos validos."
             )
-
-        # Dimensiones:
-        # ciclos x canales x frecuencias x puntos
 
         # ==================================================
         # PASO 3: CALCULO DEL GPM
         # ==================================================
 
-        # Desviacion estandar de amplitud
         sigma = amp.std(
             axis=(0, 3),
             ddof=0
         )
 
-        # Dos periodos de modulacion por ciclo
+        # Segundo armonico del ciclo
         fases = np.exp(
-            -4j * np.pi
-            * np.arange(n_puntos) / n_puntos
+            -4j * np.pi * porcentajes
         )
 
-        # Coeficiente complejo por ciclo
+        # Coeficiente complejo de cada ciclo
         coef_ciclo = np.einsum(
             "kcfp,p->kcf",
             amp,
@@ -206,12 +194,13 @@ def analizar_gpm_permutaciones(
             / np.maximum(sigma, 1e-12)
         )
 
-        # Promediamos primero los valores complejos
+        # GPM complejo promedio
         gpm_complejo = (
-            coef_ciclo.mean(axis=0) * escala
+            coef_ciclo.mean(axis=0)
+            * escala
         )
 
-        # Finalmente calculamos el modulo
+        # Magnitud del GPM
         gpm = np.abs(gpm_complejo)
 
         # ==================================================
@@ -231,7 +220,8 @@ def analizar_gpm_permutaciones(
         )
 
         maximos_nulos = np.empty(
-            n_permutaciones
+            n_permutaciones,
+            dtype=float
         )
 
         bloque = 250
@@ -245,7 +235,7 @@ def analizar_gpm_permutaciones(
                 n_permutaciones
             )
 
-            # Desplazamiento independiente por ciclo
+            # Desplazamientos independientes por ciclo
             shifts = rng.integers(
                 0,
                 n_puntos,
@@ -257,17 +247,16 @@ def analizar_gpm_permutaciones(
                 * shifts / n_puntos
             )
 
-            # Distribucion nula
+            # Distribucion nula del GPM
             gpm_nulo = np.abs(
                 (giros @ coef_flat)
                 / n_ciclos
                 * escala_flat
             )
 
-            superaciones_sin += np.count_nonzero(
-                gpm_nulo >= gpm_flat[None, :],
-                axis=0
-            )
+            superaciones_sin += (
+                gpm_nulo >= gpm_flat[None, :]
+            ).sum(axis=0)
 
             maximos_nulos[inicio:fin] = (
                 gpm_nulo.max(axis=1)
@@ -277,13 +266,11 @@ def analizar_gpm_permutaciones(
         # PASO 5: SIGNIFICANCIA ESTADISTICA
         # ==================================================
 
-        # Valores p sin corregir
         p_sin = (
             (superaciones_sin + 1)
             / (n_permutaciones + 1)
         ).reshape(gpm.shape)
 
-        # Correccion max-T
         maximos_ordenados = np.sort(
             maximos_nulos
         )
@@ -302,9 +289,11 @@ def analizar_gpm_permutaciones(
             / (n_permutaciones + 1)
         ).reshape(gpm.shape)
 
-        # Umbral estadistico del 95%
-        umbral = np.percentile(
-            maximos_nulos, 95
+        umbral = float(
+            np.percentile(
+                maximos_nulos,
+                95
+            )
         )
 
         significativo = p_corr < 0.05
@@ -323,7 +312,8 @@ def analizar_gpm_permutaciones(
             "p_corregido": p_corr,
             "significativo": significativo,
             "umbral_maxT_95": umbral,
-            "n_permutaciones": n_permutaciones
+            "n_permutaciones": n_permutaciones,
+            "metodo": "STFT"
         }
 
         # ==================================================
@@ -331,20 +321,22 @@ def analizar_gpm_permutaciones(
         # ==================================================
 
         print(
-            f"\nGPM a {vel} m/s: {n_ciclos} ciclos; "
-            f"{n_canales} canales x {n_frecuencias} "
-            f"frecuencias = {gpm_flat.size} pruebas; "
+            f"\nGPM {vel} m/s: "
+            f"{n_ciclos} ciclos; "
+            f"{n_canales} canales x "
+            f"{n_frecuencias} frecuencias "
+            f"= {gpm_flat.size} pruebas; "
             f"{n_permutaciones} permutaciones"
         )
 
         print(
-            f"  Umbral global max-T (95%): "
+            f"  Umbral max-T (95 %): "
             f"{umbral:.4f}"
         )
 
         print(
-            "  Banda                      Canal   "
-            "Pico(Hz)   GPM     p ajustado   Sig"
+            "  Banda                      Canal  "
+            "Pico(Hz)    GPM   p ajustado  Sig"
         )
 
         for nombre, (a, b, incluye_fin) in bandas.items():
@@ -360,36 +352,36 @@ def analizar_gpm_permutaciones(
 
             indices = np.flatnonzero(mascara)
 
-            if len(indices) == 0:
+            if not indices.size:
                 continue
 
             for ic, canal in enumerate(raw.ch_names):
 
-                idx = indices[
+                j = indices[
                     np.argmax(gpm[ic, indices])
                 ]
 
                 print(
                     f"  {nombre:<26}"
-                    f"{canal:<7}"
-                    f"{frecuencias[idx]:>6.0f}   "
-                    f"{gpm[ic, idx]:>7.3f}     "
-                    f"{p_corr[ic, idx]:>7.4f}     "
-                    f"{'SI' if significativo[ic, idx] else 'NO'}"
+                    f"{canal:<6}"
+                    f"{frecuencias[j]:>7.0f} "
+                    f"{gpm[ic, j]:>8.3f} "
+                    f"{p_corr[ic, j]:>10.4f} "
+                    f"{'SI' if significativo[ic, j] else 'NO'}"
                 )
 
         print(
-            "  Significativos tras correccion: "
-            f"{significativo.sum()} de {gpm_flat.size} "
-            "frecuencias/canales"
+            f"  Significativos: "
+            f"{significativo.sum()} "
+            f"de {gpm_flat.size}"
         )
 
         # ==================================================
-        # PASO 8: GRAFICO ORIGINAL DEL GPM
+        # PASO 8: GRAFICO DEL GPM
         # ==================================================
 
         fig, ejes = plt.subplots(
-            len(raw.ch_names),
+            n_canales,
             1,
             figsize=(8.27, 12),
             sharex=True,
@@ -402,41 +394,36 @@ def analizar_gpm_permutaciones(
             zip(ejes, raw.ch_names)
         ):
 
-            # Bandas de interes
+            # Regiones de las bandas
             for nombre, (a, b, _) in bandas.items():
 
                 ax.axvspan(
                     a,
                     b,
+                    color=COLORES_BANDAS[nombre],
                     alpha=0.08,
-                    color=COLORES_BANDAS.get(
-                        nombre, "tab:green"
-                    ),
                     label=nombre if ic == 0 else None
                 )
 
-            # GPM original
             ax.plot(
                 frecuencias,
                 gpm[ic],
                 "-o",
-                markersize=2.5,
+                ms=2.5,
+                lw=1,
                 color="black",
-                linewidth=1,
-                label="GPM"
+                label="GPM" if ic == 0 else None
             )
 
-            # Umbral max-T
             ax.axhline(
                 umbral,
                 color="tab:red",
-                linestyle="--",
-                linewidth=1,
-                label="Umbral max-T (p < 0.05)"
+                ls="--",
+                lw=1,
+                label="Umbral max-T"
                 if ic == 0 else None
             )
 
-            # Frecuencias significativas
             ax.scatter(
                 frecuencias[significativo[ic]],
                 gpm[ic, significativo[ic]],
@@ -454,11 +441,11 @@ def analizar_gpm_permutaciones(
 
             ax.grid(alpha=0.25)
 
+        ejes[-1].set_xlim(fmin, fmax)
+
         ejes[-1].set_xlabel(
             "Frecuencia EEG (Hz)"
         )
-
-        ejes[-1].set_xlim(fmin, fmax)
 
         ejes[0].legend(
             loc="upper right",
@@ -467,14 +454,13 @@ def analizar_gpm_permutaciones(
         )
 
         fig.suptitle(
-            f"GPM y permutaciones max-T - {vel} m/s\n"
-            f"{n_ciclos} ciclos, {n_permutaciones} "
-            "permutaciones; FWER 5%",
+            f"GPM de amplitudes STFT - {vel} m/s\n"
+            f"{n_ciclos} ciclos, "
+            f"{n_permutaciones} permutaciones; "
+            "FWER 5 %",
             fontsize=11
         )
 
         figuras.append(fig)
-
-        del amp
 
     return resultados, figuras

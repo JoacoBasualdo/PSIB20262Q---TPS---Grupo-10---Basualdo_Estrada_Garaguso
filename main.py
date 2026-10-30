@@ -1,4 +1,6 @@
+
 import os
+import sys
 
 from Funciones import (
     Lectura,
@@ -8,26 +10,53 @@ from Funciones import (
     Analisis_Espectral,
     Analisis_Estadistico,
     Control_Calidad,
-    OpenSim_Marcha
+    OpenSim_Marcha,
 )
+
+
+# ==========================================================
+# ETAPAS PARA LA INTERFAZ
+# ==========================================================
 
 ETAPAS = [
     "Lectura de datos",
     "Visualizacion inicial",
-    "Procesamiento de la señal",
+    "Procesamiento de la senal",
     "Plataformas de fuerza",
     "Segmentacion del EEG",
     "Control de calidad",
-    "Analisis tiempo-frecuencia",
+    "Analisis tiempo-frecuencia mediante STFT",
     "GPM y estadistica",
     "OpenSim e IMU",
 ]
 
+CANALES_ANALISIS = (
+    "C3", "Cz", "C4", "P3", "Pz", "P4"
+)
 
-def _avisar_etapa(al_iniciar_etapa, indice):
-    if al_iniciar_etapa is not None:
-        al_iniciar_etapa(indice, ETAPAS[indice])
 
+# ==========================================================
+# FUNCIONES AUXILIARES
+# ==========================================================
+
+def _avisar_etapa(callback, indice):
+
+    if callback is not None:
+        callback(
+            indice,
+            ETAPAS[indice]
+        )
+
+
+def _agregar_figuras(figuras):
+
+    for fig in figuras:
+        Reporte.agregar_figura(fig)
+
+
+# ==========================================================
+# PIPELINE PRINCIPAL
+# ==========================================================
 
 def ejecutar_pipeline(
         sujeto_id="10",
@@ -45,18 +74,30 @@ def ejecutar_pipeline(
         ruta_pdf=None,
         al_iniciar_etapa=None):
 
-    # Seis canales de interes
-    canales_con_pz = (
-        "C3", "Cz", "C4", "P3", "Pz", "P4"
-    )
+    """
+    Ejecuta las etapas del procesamiento.
+
+    Etapas 6 y 7:
+        Transformada STFT.
+
+    Etapa 8:
+        Modelado biomecanico mediante OpenSim.
+
+    La funcion es compatible con la interfaz
+    grafica y con la ejecucion por terminal.
+    """
+
+    stdout_anterior = sys.stdout
 
     Reporte.iniciar_registro()
 
+    completado = False
+
     try:
 
-        # ==========================================================
+        # ==================================================
         # ETAPA 1: LECTURA DE DATOS
-        # ==========================================================
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 0)
 
@@ -72,27 +113,41 @@ def ejecutar_pipeline(
             sujeto_id=sujeto_id
         )
 
+        # Seleccion de velocidades desde la interfaz
         if velocidades is not None:
-            dict_eeg = {v: r for v, r in dict_eeg.items() if v in velocidades}
-            dict_fp = {v: d for v, d in dict_fp.items() if v in velocidades}
+
+            dict_eeg = {
+                vel: raw
+                for vel, raw in dict_eeg.items()
+                if vel in velocidades
+            }
+
+            dict_fp = {
+                vel: df
+                for vel, df in dict_fp.items()
+                if vel in velocidades
+            }
 
         if not dict_eeg:
             raise ValueError(
                 "No se cargaron registros EEG."
             )
 
-        if "0.5" in dict_eeg:
-            print(
-                "\nVerificacion rapida de los datos a 0.5 m/s:"
-            )
-            print(
-                f"  Frecuencia de muestreo EEG: "
-                f"{dict_eeg['0.5'].info['sfreq']} Hz"
+        if not dict_fp:
+            raise ValueError(
+                "No se cargaron plataformas de fuerza."
             )
 
-        # ==========================================================
+        if set(dict_eeg) != set(dict_fp):
+            raise ValueError(
+                "Las velocidades de EEG y FP no coinciden. "
+                f"EEG={sorted(dict_eeg)}, "
+                f"FP={sorted(dict_fp)}."
+            )
+
+        # ==================================================
         # ETAPA 2: VISUALIZACION INICIAL
-        # ==========================================================
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 1)
 
@@ -100,91 +155,41 @@ def ejecutar_pipeline(
             "Etapa 2: Visualizacion inicial"
         )
 
-        # EEG crudo: todos los canales disponibles
-        figuras_eeg = (
+        _agregar_figuras(
             Visualizacion_Inicial.graficar_eeg_crudo(
                 dict_eeg
             )
         )
 
-        for fig in figuras_eeg:
-            Reporte.agregar_figura(fig)
-
-        print(
-            "\nVisualizamos los canales centrales y parietales "
-            "relacionados con el control y la integracion "
-            "sensoriomotora de la marcha."
-        )
-
-        # Pz todavia no esta reconstruido en el EEG crudo
-        figuras_motoras = (
+        # Pz todavia no esta reconstruido
+        _agregar_figuras(
             Visualizacion_Inicial.graficar_canales_motores(
                 dict_eeg
             )
         )
 
-        for fig in figuras_motoras:
-            Reporte.agregar_figura(fig)
-
-        print(
-            "\nCalculamos la densidad espectral de potencia "
-            "(PSD) mediante Welch."
-        )
-        print("  - Mu: 8-13 Hz.")
-        print("  - Beta: 13-30 Hz.")
-        print("  - Gamma baja: 24-40 Hz.")
-        print(
-            "  - Beta y gamma baja se superponen "
-            "entre 24 y 30 Hz."
-        )
-        print(
-            "  - Tambien se analiza la banda de 1-4 Hz, "
-            "donde puede concentrarse parte del "
-            "artefacto de los pasos."
-        )
-
-        figura_psd = (
+        Reporte.agregar_figura(
             Visualizacion_Inicial.graficar_psd(
                 dict_eeg
             )
         )
 
-        Reporte.agregar_figura(figura_psd)
-
-        # ==========================================================
-        # ETAPA 3: PROCESAMIENTO DE EEG
-        # ==========================================================
+        # ==================================================
+        # ETAPA 3: PREPROCESAMIENTO EEG
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 2)
 
         Reporte.agregar_subtitulo(
-            "Etapa 3: Procesamiento de la señal"
+            "Etapa 3: Procesamiento de la senal EEG"
         )
 
-        sfreq = next(
-            iter(dict_eeg.values())
-        ).info["sfreq"]
-
-        # ==========================================================
-        # PASO 1: RE-REFERENCIA
-        # ==========================================================
-
-        print(
-            "\nPaso 1: Re-referencia al promedio "
-            "de las orejas (A1 y A2)"
+        sfreq = float(
+            next(iter(dict_eeg.values())).info["sfreq"]
         )
 
         print(
-            "  - El EEG se registro con Pz como "
-            "referencia de hardware."
-        )
-        print(
-            "  - Cada canal representa la diferencia "
-            "de potencial respecto de Pz."
-        )
-        print(
-            "  - Se reconstruye Pz y se utiliza "
-            "el promedio de A1 y A2 como referencia."
+            "\nRe-referencia al promedio de A1 y A2"
         )
 
         dict_eeg_ref = (
@@ -193,210 +198,142 @@ def ejecutar_pipeline(
             )
         )
 
-        print(
-            "\nSeñal y PSD despues de la re-referencia"
-        )
-
-        for fig in (
+        _agregar_figuras(
             Visualizacion_Inicial.graficar_canales_motores(
                 dict_eeg_ref,
-                canales=canales_con_pz,
+                canales=CANALES_ANALISIS,
                 titulo="Despues de la re-referencia a A1 y A2"
             )
-        ):
-            Reporte.agregar_figura(fig)
+        )
 
         Reporte.agregar_figura(
             Visualizacion_Inicial.graficar_psd(
                 dict_eeg_ref,
-                canales=canales_con_pz,
-                titulo="PSD despues de la re-referencia a A1 y A2"
+                canales=CANALES_ANALISIS,
+                titulo="PSD despues de la re-referencia"
             )
         )
 
-        # ==========================================================
-        # PASO 2: FILTRO PASAALTOS
-        # ==========================================================
+        # ==================================================
+        # FILTRO PASAALTOS
+        # ==================================================
 
         print(
-            f"\nPaso 2: Filtro pasaaltos en {f_pasaaltos:g} Hz"
+            f"\nFiltro FIR pasaaltos: "
+            f"{f_pasaaltos:g} Hz"
         )
 
-        print(
-            "  - Se utiliza un filtro FIR "
-            "con ventana de Hamming."
-        )
-        print(
-            "  - Atenua el offset y la deriva lenta."
-        )
-        print(
-            "  - Se aplica filtfilt para obtener "
-            "fase cero."
-        )
-
-        filtro_pasaaltos = (
-            Procesamiento.disenar_filtro(
-                sfreq,
-                "pasaaltos",
-                f_pasaaltos,
-                n_coef_pasaaltos
-            )
+        b_pa = Procesamiento.disenar_filtro(
+            sfreq,
+            "pasaaltos",
+            f_pasaaltos,
+            n_coef_pasaaltos
         )
 
         Reporte.agregar_figura(
             Procesamiento.graficar_respuesta_filtro(
-                filtro_pasaaltos,
+                b_pa,
                 sfreq,
                 f_pasaaltos,
-                f"Filtro FIR pasaaltos en {f_pasaaltos:g} Hz"
+                "Respuesta del filtro pasaaltos"
             )
         )
 
         dict_eeg_pa = Procesamiento.filtrar(
             dict_eeg_ref,
-            filtro_pasaaltos
+            b_pa
         )
 
-        print(
-            "\nSeñal y PSD despues del pasaaltos"
-        )
-
-        for fig in (
+        _agregar_figuras(
             Visualizacion_Inicial.graficar_canales_motores(
                 dict_eeg_pa,
-                canales=canales_con_pz,
-                titulo=f"Despues del pasaaltos ({f_pasaaltos:g} Hz)"
+                canales=CANALES_ANALISIS,
+                titulo="Despues del pasaaltos"
             )
-        ):
-            Reporte.agregar_figura(fig)
+        )
 
         Reporte.agregar_figura(
             Visualizacion_Inicial.graficar_psd(
                 dict_eeg_pa,
-                canales=canales_con_pz,
-                titulo=f"PSD despues del pasaaltos ({f_pasaaltos:g} Hz)"
+                canales=CANALES_ANALISIS,
+                titulo="PSD despues del pasaaltos"
             )
         )
 
-        # ==========================================================
-        # PASO 3: FILTRO PASABAJOS
-        # ==========================================================
+        # ==================================================
+        # FILTRO PASABAJOS
+        # ==================================================
 
         print(
-            f"\nPaso 3: Filtro pasabajos en {f_pasabajos:g} Hz"
+            f"\nFiltro FIR pasabajos: "
+            f"{f_pasabajos:g} Hz"
         )
 
-        print(
-            "  - Se utiliza un filtro FIR "
-            f"de {n_coef_pasabajos} coeficientes."
-        )
-        print(
-            "  - Se conservan mu, beta y gamma "
-            "baja hasta 40 Hz."
-        )
-        print(
-            "  - Se atenua el ruido de red "
-            "electrica de 50 Hz."
-        )
-
-        filtro_pasabajos = (
-            Procesamiento.disenar_filtro(
-                sfreq,
-                "pasabajos",
-                f_pasabajos,
-                n_coef_pasabajos
-            )
-        )
-
-        atenuacion_gamma, atenuacion_gamma_filtfilt = (
-            Procesamiento.atenuacion_en(
-                filtro_pasabajos,
-                sfreq,
-                40.0
-            )
-        )
-
-        print(
-            f"  Ganancia en 40 Hz: "
-            f"{atenuacion_gamma_filtfilt:.2f} dB "
-            "con filtfilt."
-        )
-
-        atenuacion_simple, atenuacion_filtfilt = (
-            Procesamiento.atenuacion_en(
-                filtro_pasabajos,
-                sfreq,
-                50.0
-            )
-        )
-
-        print(
-            f"  Atenuacion en 50 Hz: "
-            f"{atenuacion_simple:.1f} dB "
-            f"(una pasada), "
-            f"{atenuacion_filtfilt:.1f} dB "
-            "(con filtfilt)."
+        b_pb = Procesamiento.disenar_filtro(
+            sfreq,
+            "pasabajos",
+            f_pasabajos,
+            n_coef_pasabajos
         )
 
         Reporte.agregar_figura(
             Procesamiento.graficar_respuesta_filtro(
-                filtro_pasabajos,
+                b_pb,
                 sfreq,
                 f_pasabajos,
-                f"Filtro FIR pasabajos en {f_pasabajos:g} Hz"
+                "Respuesta del filtro pasabajos"
             )
         )
+
+        for frecuencia in (40.0, 50.0):
+
+            simple, doble = (
+                Procesamiento.atenuacion_en(
+                    b_pb,
+                    sfreq,
+                    frecuencia
+                )
+            )
+
+            print(
+                f"  Ganancia en {frecuencia:g} Hz: "
+                f"{simple:.2f} dB, "
+                f"{doble:.2f} dB con filtfilt."
+            )
 
         dict_eeg_pb = Procesamiento.filtrar(
             dict_eeg_pa,
-            filtro_pasabajos
+            b_pb
         )
 
-        print(
-            "\nSeñal y PSD despues del pasabajos"
-        )
-
-        for fig in (
+        _agregar_figuras(
             Visualizacion_Inicial.graficar_canales_motores(
                 dict_eeg_pb,
-                canales=canales_con_pz,
-                titulo=f"Despues del pasabajos ({f_pasabajos:g} Hz)"
+                canales=CANALES_ANALISIS,
+                titulo="Despues del pasabajos"
             )
-        ):
-            Reporte.agregar_figura(fig)
+        )
 
         Reporte.agregar_figura(
             Visualizacion_Inicial.graficar_psd(
                 dict_eeg_pb,
-                canales=canales_con_pz,
-                titulo=f"PSD despues del pasabajos ({f_pasabajos:g} Hz)"
+                canales=CANALES_ANALISIS,
+                titulo="PSD despues del pasabajos"
             )
         )
 
-        # ==========================================================
-        # ETAPA 4: PROCESAMIENTO GRF
-        # ==========================================================
+        # ==================================================
+        # ETAPA 4: PLATAFORMAS DE FUERZA
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 3)
 
         Reporte.agregar_subtitulo(
-            "Etapa 4: Fuerza vertical de las plataformas de fuerza"
+            "Etapa 4: Plataformas de fuerza y fases de marcha"
         )
-
-        print(
-            "\nLas plataformas de fuerza permiten "
-            "identificar contactos y despegues."
-        )
-        print("  - Plataforma 1: pie izquierdo.")
-        print("  - Plataforma 2: pie derecho.")
-        print("  - Frecuencia de muestreo: 1000 Hz.")
 
         dict_fz = Procesamiento.extraer_fz(
             dict_fp
-        )
-
-        print(
-            "\nCorreccion del offset"
         )
 
         dict_fz_corregido = (
@@ -405,57 +342,16 @@ def ejecutar_pipeline(
             )
         )
 
-        print(
-            "\nFuerza vertical antes y despues "
-            "de corregir el offset"
-        )
-
-        for fig in Procesamiento.graficar_fz(
-            dict_fz,
-            dict_fz_corregido
-        ):
-            Reporte.agregar_figura(fig)
-
-        # ==========================================================
-        # DETECCION DE EVENTOS
-        # ==========================================================
-
-        print(
-            "\nDeteccion de contactos y despegues"
-        )
-
-        print(
-            "  - Un pie esta apoyado cuando "
-            f"Fz supera {umbral_contacto:g} N."
-        )
-        print(
-            "  - Se eliminan cambios de estado "
-            "menores a 100 ms."
-        )
-
-        dict_eventos = (
-            Procesamiento.detectar_eventos(
-                dict_fz_corregido,
-                umbral=umbral_contacto
+        _agregar_figuras(
+            Procesamiento.graficar_fz(
+                dict_fz,
+                dict_fz_corregido
             )
         )
 
-        # ==========================================================
-        # ETIQUETADO DE FASES
-        # ==========================================================
-
-        print(
-            "\nSegmentacion del ciclo de marcha "
-            "en cuatro fases"
-        )
-
-        print("  - Doble apoyo inicial.")
-        print("  - Apoyo simple.")
-        print("  - Doble apoyo final.")
-        print("  - Balanceo.")
-        print(
-            "  - Se excluye el primer ciclo "
-            "completo de marcha."
+        dict_eventos = Procesamiento.detectar_eventos(
+            dict_fz_corregido,
+            umbral=umbral_contacto
         )
 
         dict_fases = Procesamiento.etiquetar_fases(
@@ -471,54 +367,36 @@ def ejecutar_pipeline(
 
             if len(contactos) >= primer_ciclo:
 
-                inicio_analisis[vel] = eventos["tiempo"][
-                    contactos[primer_ciclo - 1]
-                ]
-
-                print(
-                    f"  {vel} m/s: inicio del analisis "
-                    f"en t={inicio_analisis[vel]:.3f} s"
+                inicio_analisis[vel] = (
+                    eventos["tiempo"][
+                        contactos[primer_ciclo - 1]
+                    ]
                 )
-
-        print(
-            "\nFuerza vertical con las fases marcadas"
-        )
 
         for vel, inicio in inicio_analisis.items():
 
-            for fig in Procesamiento.graficar_fases(
-                {vel: dict_fz_corregido[vel]},
-                {vel: dict_eventos[vel]},
-                {vel: dict_fases[vel]},
-                inicio=inicio
-            ):
-                Reporte.agregar_figura(fig)
+            _agregar_figuras(
+                Procesamiento.graficar_fases(
+                    {vel: dict_fz_corregido[vel]},
+                    {vel: dict_eventos[vel]},
+                    {vel: dict_fases[vel]},
+                    inicio=inicio
+                )
+            )
 
-        # ==========================================================
-        # ETAPA 5: SEGMENTACION EEG Y MARCHA
-        # ==========================================================
+        # ==================================================
+        # ETAPA 5: SEGMENTACION EEG
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 4)
 
         Reporte.agregar_subtitulo(
             "Etapa 5: Segmentacion del EEG en ciclos "
-            "y fases de la marcha"
+            "y fases de marcha"
         )
 
         print(
-            "\nAlineacion temporal entre "
-            "plataformas y EEG"
-        )
-
-        print("  - EEG: 300 Hz.")
-        print("  - GRF: 1000 Hz.")
-        print(
-            "  - Se asigna a cada muestra del EEG "
-            "la fase detectada en las plataformas."
-        )
-        print(
-            "  - Por ahora se supone "
-            "desfase temporal cero."
+            "\nSe supone desfase EEG-FP = 0 s."
         )
 
         dict_fases_eeg = (
@@ -528,46 +406,18 @@ def ejecutar_pipeline(
             )
         )
 
-        print(
-            "\nEEG procesado con las fases marcadas"
-        )
-
         for vel, inicio in inicio_analisis.items():
 
             if vel in dict_fases_eeg:
 
-                for fig in Procesamiento.graficar_eeg_fases(
-                    {vel: dict_eeg_pb[vel]},
-                    {vel: dict_fases_eeg[vel]},
-                    canales=canales_con_pz,
-                    inicio=inicio
-                ):
-                    Reporte.agregar_figura(fig)
-
-        # ==========================================================
-        # SEGMENTACION EN CICLOS
-        # ==========================================================
-
-        print(
-            "\nSegmentacion del EEG en ciclos"
-        )
-
-        print(
-            "  - Un ciclo comienza con el "
-            "contacto derecho y termina "
-            "en el contacto derecho siguiente."
-        )
-        print(
-            "  - Se excluye el primer ciclo completo."
-        )
-        print(
-            "  - Se rechazan duraciones que se "
-            "alejen mas del 30% de la mediana."
-        )
-        print(
-            "  - Cada ciclo se normaliza "
-            "temporalmente al 0-100%."
-        )
+                _agregar_figuras(
+                    Procesamiento.graficar_eeg_fases(
+                        {vel: dict_eeg_pb[vel]},
+                        {vel: dict_fases_eeg[vel]},
+                        canales=CANALES_ANALISIS,
+                        inicio=inicio
+                    )
+                )
 
         dict_ciclos = Procesamiento.segmentar_ciclos(
             dict_eeg_pb,
@@ -576,9 +426,9 @@ def ejecutar_pipeline(
             primer_ciclo=primer_ciclo
         )
 
-        # ==========================================================
-        # CONTROL DE CALIDAD DE LOS CICLOS
-        # ==========================================================
+        # ==================================================
+        # CONTROL DE CALIDAD
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 5)
 
@@ -586,306 +436,207 @@ def ejecutar_pipeline(
             "Control de calidad de los ciclos de EEG"
         )
 
-        print(
-            "\nEvaluacion de calidad en "
-            "C3, Cz, C4, P3, Pz y P4"
+        (
+            dict_ciclos_analisis,
+            diagnostico_qc,
+            figuras_qc
+        ) = Control_Calidad.controlar_calidad_ciclos(
+            dict_eeg_pb,
+            dict_ciclos,
+            canales=CANALES_ANALISIS,
+            umbral_mad=umbral_mad,
+            umbral_extremo=umbral_extremo
         )
 
-        print(
-            "  - Se calcula amplitud pico a pico, "
-            "RMS centrado y saltos entre muestras."
-        )
-        print(
-            "  - Se identifican ciclos atipicos "
-            "mediante MAD."
-        )
-        print(
-            "  - Los datos originales se conservan."
-        )
+        _agregar_figuras(figuras_qc)
 
-        dict_ciclos_qc, diagnostico_qc, figuras_qc = (
-            Control_Calidad.controlar_calidad_ciclos(
-                dict_eeg_pb,
-                dict_ciclos,
-                canales=canales_con_pz,
-                umbral_mad=umbral_mad,
-                umbral_extremo=umbral_extremo
+        _agregar_figuras(
+            Procesamiento.graficar_ciclo_promedio(
+                dict_ciclos_analisis,
+                canales=CANALES_ANALISIS
             )
         )
 
-        for fig in figuras_qc:
-            Reporte.agregar_figura(fig)
-
-        # Los ciclos depurados se utilizan en las
-        # etapas siguientes.
-        dict_ciclos_analisis = dict_ciclos_qc
-
-        # ==========================================================
-        # CICLO PROMEDIO
-        # ==========================================================
-
-        print(
-            "\nCiclo promedio de los seis canales"
-        )
-
-        for fig in Procesamiento.graficar_ciclo_promedio(
-            dict_ciclos_analisis,
-            canales=canales_con_pz
-        ):
-            Reporte.agregar_figura(fig)
-
-        # ==========================================================
-        # ETAPA 6: ANALISIS TIEMPO-FRECUENCIA
-        # ==========================================================
+        # ==================================================
+        # ETAPA 6: STFT
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 6)
 
         Reporte.agregar_subtitulo(
-            "Etapa 6: Analisis tiempo-frecuencia "
-            "por fase de marcha"
+            "Etapa 6: Analisis tiempo-frecuencia con STFT"
         )
 
         print(
-            "\nAnalisis de Morlet"
+            "\nSTFT: ventana Hann de 0.5 s, "
+            "solapamiento del 90 %, "
+            "frecuencias de 8 a 40 Hz."
         )
 
         print(
-            "  - Se calcula Morlet sobre el EEG "
-            "filtrado continuo."
-        )
-        print(
-            "  - Se utilizan ciclos validos "
-            "desde el segundo ciclo completo."
-        )
-        print(
-            "  - Se analiza potencia en seis canales: "
-            "C3, Cz, C4, P3, Pz y P4."
-        )
-        print("  - Mu: 8-13 Hz.")
-        print("  - Beta: 13-30 Hz.")
-        print("  - Gamma baja: 24-40 Hz.")
-        print(
-            "  - La referencia es la potencia "
-            "media durante los ciclos analizados."
+            "La referencia es la potencia media "
+            "durante la marcha."
         )
 
         resultados_tf = (
             Analisis_Espectral.analizar_tiempo_frecuencia(
                 dict_eeg_pb,
                 dict_ciclos_analisis,
-                canales=canales_con_pz,
+                canales=CANALES_ANALISIS,
                 fmin=8.0,
                 fmax=40.0,
                 paso=1.0,
-                n_ciclos_wavelet=4.0,
+                ventana_s=0.5,
+                solapamiento=0.90,
                 n_puntos=101
             )
         )
 
-        # ==========================================================
-        # FIGURA A: MAPAS DE MORLET
-        # ==========================================================
-
-        print(
-            "\nFigura A: mapas de potencia tiempo-frecuencia"
-        )
-
-        for fig in (
+        # Figura A: espectrograma
+        _agregar_figuras(
             Analisis_Espectral.graficar_mapas_tiempo_frecuencia(
                 resultados_tf
             )
-        ):
-            Reporte.agregar_figura(fig)
-
-        # ==========================================================
-        # FIGURA B: POTENCIA POR BANDA
-        # ==========================================================
-
-        print(
-            "\nFigura B: potencia relativa "
-            "de mu, beta y gamma baja"
         )
 
-        for fig in (
+        # Figura B: potencia por bandas
+        _agregar_figuras(
             Analisis_Espectral.graficar_potencia_bandas(
                 resultados_tf
             )
-        ):
-            Reporte.agregar_figura(fig)
-
-        # ==========================================================
-        # FIGURA C: COMPARACION ENTRE FASES
-        # ==========================================================
-
-        print(
-            "\nComparacion de potencia entre "
-            "fases de marcha"
         )
 
+        # Figura C: comparacion entre fases
         resumen_fases = (
             Analisis_Espectral.resumen_por_fase(
                 resultados_tf
             )
         )
 
-        print(
-            "  - Se calcula media y desviacion "
-            "estandar entre ciclos validos."
-        )
-        print(
-            "  - Los resultados son descriptivos."
-        )
-        print(
-            "  - No se realizan pruebas de "
-            "significancia en esta comparacion."
-        )
-
-        for fig in (
+        _agregar_figuras(
             Analisis_Espectral.graficar_comparacion_fases(
                 resumen_fases
             )
-        ):
-            Reporte.agregar_figura(fig)
+        )
 
-        # ==========================================================
-        # ETAPA 7: GPM Y PRUEBA ESTADISTICA
-        # ==========================================================
+        # ==================================================
+        # ETAPA 7: GPM CON STFT
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 7)
 
         Reporte.agregar_subtitulo(
-            "Etapa 7: GPM y significancia estadistica"
+            "Etapa 7: GPM y prueba estadistica"
         )
 
         print(
-            "\nAnalisis GPM segun Seeber et al. (2014)"
+            "\nGPM a partir de amplitudes STFT."
         )
 
         print(
-            "  - Se estudia la modulacion "
-            "de amplitud del EEG sincronizada "
-            "con el ciclo de marcha."
-        )
-        print(
-            "  - Se consideran dos periodos "
-            "de modulacion por ciclo completo."
-        )
-        print(
-            "  - Se analizan mu, beta y gamma baja."
-        )
-        print(
-            "  - Se utilizan seis canales: "
-            "C3, Cz, C4, P3, Pz y P4."
-        )
-        print(
-            "  - Se realizan 198 comparaciones: "
-            "6 canales x 33 frecuencias."
-        )
-        print(
-            f"  - Se realizan {n_permutaciones} permutaciones."
-        )
-        print(
-            "  - Se aplica correccion max-T "
-            "para controlar la FWER al 5%."
+            f"Seis canales, 33 frecuencias, "
+            f"{n_permutaciones} permutaciones "
+            "y correccion max-T."
         )
 
         resultados_gpm, figuras_gpm = (
             Analisis_Estadistico.analizar_gpm_permutaciones(
                 dict_eeg_pb,
                 dict_ciclos_analisis,
-                canales=canales_con_pz,
+                canales=CANALES_ANALISIS,
                 fmin=8.0,
                 fmax=40.0,
                 paso=1.0,
-                n_ciclos_wavelet=4.0,
+                ventana_s=0.5,
+                solapamiento=0.90,
                 n_puntos=100,
                 n_permutaciones=n_permutaciones,
                 semilla=42
             )
         )
 
-        # Unicamente el GPM original.
-        # No se generan zooms, graficos logaritmicos
-        # ni graficos adicionales de potencia gamma.
-        for fig in figuras_gpm:
-            Reporte.agregar_figura(fig)
+        _agregar_figuras(figuras_gpm)
 
         print(
-            "\nLa significancia del GPM indica "
-            "modulacion relacionada con el ciclo "
-            "de marcha, pero no demuestra "
-            "por si sola un origen neuronal."
+            "La significancia del GPM indica "
+            "modulacion durante la marcha, "
+            "pero no demuestra por si sola "
+            "un origen neuronal."
         )
 
-        # ==========================================================
-        # ETAPA 8: OPENSIM Y COMPARACION CON IMU
-        # ==========================================================
+        # ==================================================
+        # ETAPA 8: OPENSIM E IMU
+        # ==================================================
 
         _avisar_etapa(al_iniciar_etapa, 8)
 
         Reporte.agregar_subtitulo(
-            "Etapa 8: Modelado en OpenSim y comparacion con IMU"
-        )
-
-        print(
-            "\nIntegracion con OpenSim"
-        )
-
-        print(
-            "  - La frecuencia de zancada "
-            "se obtiene de la PSD de Fz."
-        )
-        print(
-            "  - El modelo gait2392 se escala "
-            "con las medidas de subject-info.csv."
-        )
-        print(
-            "  - Se genera un archivo .mot "
-            "a partir de una marcha de referencia "
-            "y los contactos y despegues detectados."
-        )
-        print(
-            "  - OpenSim calcula la cinematica "
-            "del modelo personalizado."
-        )
-        print(
-            "  - Se compara la simulacion con "
-            "las mediciones IMU de Xsens."
+            "Etapa 8: OpenSim y comparacion con IMU"
         )
 
         resultados_opensim = None
 
         if incluir_opensim:
 
-            resultados_opensim, figuras_opensim = (
-                OpenSim_Marcha.integrar_opensim(
-                    sujeto_id,
-                    dict_fz_corregido,
-                    dict_eventos
-                )
+            (
+                resultados_opensim,
+                figuras_opensim
+            ) = OpenSim_Marcha.integrar_opensim(
+                sujeto_id,
+                dict_fz_corregido,
+                dict_eventos
             )
 
-            for fig in figuras_opensim:
-                Reporte.agregar_figura(fig)
+            _agregar_figuras(figuras_opensim)
 
         else:
 
             print(
-                "\nLa integracion con OpenSim "
-                "no se incluyo en esta ejecucion."
+                "No se ejecuto OpenSim en esta corrida."
             )
+
+        completado = True
 
     finally:
 
-        Reporte.finalizar_registro()
+        # Restaurar la salida de la consola
+        finalizar = getattr(
+            Reporte,
+            "finalizar_registro",
+            None
+        )
 
-    elementos = Reporte.obtener_elementos()
+        if callable(finalizar):
+            finalizar()
+        else:
+            sys.stdout = stdout_anterior
 
-    if ruta_pdf is not None:
+    # ======================================================
+    # GUARDAR PDF
+    # ======================================================
+
+    if completado and ruta_pdf is not None:
 
         Reporte.guardar_pdf(
             ruta_pdf,
             titulo=f"Resultados - Sujeto {sujeto_id}"
+        )
+
+    # ======================================================
+    # DEVOLVER RESULTADOS A LA INTERFAZ
+    # ======================================================
+
+    obtener = getattr(
+        Reporte,
+        "obtener_elementos",
+        None
+    )
+
+    if callable(obtener):
+        elementos = obtener()
+    else:
+        elementos = list(
+            getattr(Reporte, "_elementos", [])
         )
 
     return {
@@ -896,9 +647,13 @@ def ejecutar_pipeline(
         "ciclos": dict_ciclos_analisis,
         "tiempo_frecuencia": resultados_tf,
         "gpm": resultados_gpm,
-        "opensim": resultados_opensim,
+        "opensim": resultados_opensim
     }
 
+
+# ==========================================================
+# EJECUCION DESDE TERMINAL
+# ==========================================================
 
 def main():
 
