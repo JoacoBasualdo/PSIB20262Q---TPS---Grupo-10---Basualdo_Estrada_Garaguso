@@ -3,14 +3,12 @@ import os
 import sys
 
 from Funciones import (
-    Lectura,
-    Visualizacion_Inicial,
-    Procesamiento,
-    Reporte,
-    Analisis_Espectral,
-    Analisis_Estadistico,
-    Control_Calidad,
-    OpenSim_Marcha,
+    LECTURA,
+    VISUALIZACION,
+    REPORTE,
+    FEATURES,
+    INTERPRETACION,
+    VALIDACION,
 )
 
 
@@ -20,8 +18,8 @@ from Funciones import (
 
 ETAPAS = [
     "Lectura de datos",
-    "Visualizacion inicial",
-    "Procesamiento de la senal",
+    "Visualizacion inicial y re-referencia",
+    "Acondicionamiento del EEG",
     "Plataformas de fuerza",
     "Segmentacion del EEG",
     "Control de calidad",
@@ -29,6 +27,19 @@ ETAPAS = [
     "GPM y estadistica",
     "OpenSim e IMU",
 ]
+
+# Seis etapas funcionales visibles; se respetan los nueve pasos internos.
+# VALIDACION acondiciona, sincroniza, segmenta y controla la calidad;
+# FEATURES extrae STFT, potencia por bandas y GPM sobre ciclos validados.
+CATEGORIAS_INTERFAZ = (
+    "LECTURA", "VISUALIZACION", "VALIDACION",
+    "FEATURES", "INTERPRETACION", "REPORTE",
+)
+
+# Indice de categoria (0-5) correspondiente a los nueve pasos internos.
+# Esta correspondencia es monotona: nunca se vuelve a una categoria anterior.
+CATEGORIA_POR_PASO = (0, 1, 2, 2, 2, 2, 3, 3, 4)
+
 
 CANALES_ANALISIS = (
     "C3", "Cz", "C4", "P3", "Pz", "P4"
@@ -51,7 +62,7 @@ def _avisar_etapa(callback, indice):
 def _agregar_figuras(figuras):
 
     for fig in figuras:
-        Reporte.agregar_figura(fig)
+        REPORTE.agregar_figura(fig)
 
 
 # ==========================================================
@@ -89,7 +100,7 @@ def ejecutar_pipeline(
 
     stdout_anterior = sys.stdout
 
-    Reporte.iniciar_registro()
+    REPORTE.iniciar_registro()
 
     completado = False
 
@@ -101,15 +112,15 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 0)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Etapa 1: Lectura de datos"
         )
 
-        dict_eeg = Lectura.cargar_eeg_paciente(
+        dict_eeg = LECTURA.cargar_eeg_paciente(
             sujeto_id=sujeto_id
         )
 
-        dict_fp = Lectura.cargar_fp_paciente(
+        dict_fp = LECTURA.cargar_fp_paciente(
             sujeto_id=sujeto_id
         )
 
@@ -151,67 +162,72 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 1)
 
-        Reporte.agregar_subtitulo(
-            "Etapa 2: Visualizacion inicial"
+        REPORTE.agregar_subtitulo(
+            "Etapa 2: Visualizacion inicial y re-referencia"
         )
 
         _agregar_figuras(
-            Visualizacion_Inicial.graficar_eeg_crudo(
+            VISUALIZACION.graficar_eeg_crudo(
                 dict_eeg
             )
         )
 
         # Pz todavia no esta reconstruido
         _agregar_figuras(
-            Visualizacion_Inicial.graficar_canales_motores(
-                dict_eeg
-            )
-        )
-
-        Reporte.agregar_figura(
-            Visualizacion_Inicial.graficar_psd(
+            VISUALIZACION.graficar_canales_motores(
                 dict_eeg
             )
         )
 
         # ==================================================
-        # ETAPA 3: PREPROCESAMIENTO EEG
-        # ==================================================
-
-        _avisar_etapa(al_iniciar_etapa, 2)
-
-        Reporte.agregar_subtitulo(
-            "Etapa 3: Procesamiento de la senal EEG"
-        )
-
-        sfreq = float(
-            next(iter(dict_eeg.values())).info["sfreq"]
-        )
 
         print(
             "\nRe-referencia al promedio de A1 y A2"
         )
 
         dict_eeg_ref = (
-            Procesamiento.rereferenciar_orejas(
+            VISUALIZACION.rereferenciar_orejas(
                 dict_eeg
             )
         )
 
         _agregar_figuras(
-            Visualizacion_Inicial.graficar_canales_motores(
+            VISUALIZACION.graficar_canales_motores(
                 dict_eeg_ref,
                 canales=CANALES_ANALISIS,
                 titulo="Despues de la re-referencia a A1 y A2"
             )
         )
 
-        Reporte.agregar_figura(
-            Visualizacion_Inicial.graficar_psd(
+        # ==================================================
+        # ETAPA 3: ACONDICIONAMIENTO EEG / FEATURES
+        # ==================================================
+
+        _avisar_etapa(al_iniciar_etapa, 2)
+
+        REPORTE.agregar_subtitulo(
+            "Etapa 3: Acondicionamiento de la senal EEG"
+        )
+
+        # La PSD cruda y la PSD re-referenciada se mantienen,
+        # pero se muestran en FEATURES, no en VISUALIZACION.
+
+        REPORTE.agregar_figura(
+            VISUALIZACION.graficar_psd(
+                dict_eeg
+            )
+        )
+
+        REPORTE.agregar_figura(
+            VISUALIZACION.graficar_psd(
                 dict_eeg_ref,
                 canales=CANALES_ANALISIS,
                 titulo="PSD despues de la re-referencia"
             )
+        )
+
+        sfreq = float(
+            next(iter(dict_eeg.values())).info["sfreq"]
         )
 
         # ==================================================
@@ -223,15 +239,15 @@ def ejecutar_pipeline(
             f"{f_pasaaltos:g} Hz"
         )
 
-        b_pa = Procesamiento.disenar_filtro(
+        b_pa = VALIDACION.disenar_filtro(
             sfreq,
             "pasaaltos",
             f_pasaaltos,
             n_coef_pasaaltos
         )
 
-        Reporte.agregar_figura(
-            Procesamiento.graficar_respuesta_filtro(
+        REPORTE.agregar_figura(
+            VISUALIZACION.graficar_respuesta_filtro(
                 b_pa,
                 sfreq,
                 f_pasaaltos,
@@ -239,21 +255,21 @@ def ejecutar_pipeline(
             )
         )
 
-        dict_eeg_pa = Procesamiento.filtrar(
+        dict_eeg_pa = VALIDACION.filtrar(
             dict_eeg_ref,
             b_pa
         )
 
         _agregar_figuras(
-            Visualizacion_Inicial.graficar_canales_motores(
+            VISUALIZACION.graficar_canales_motores(
                 dict_eeg_pa,
                 canales=CANALES_ANALISIS,
                 titulo="Despues del pasaaltos"
             )
         )
 
-        Reporte.agregar_figura(
-            Visualizacion_Inicial.graficar_psd(
+        REPORTE.agregar_figura(
+            VISUALIZACION.graficar_psd(
                 dict_eeg_pa,
                 canales=CANALES_ANALISIS,
                 titulo="PSD despues del pasaaltos"
@@ -269,15 +285,15 @@ def ejecutar_pipeline(
             f"{f_pasabajos:g} Hz"
         )
 
-        b_pb = Procesamiento.disenar_filtro(
+        b_pb = VALIDACION.disenar_filtro(
             sfreq,
             "pasabajos",
             f_pasabajos,
             n_coef_pasabajos
         )
 
-        Reporte.agregar_figura(
-            Procesamiento.graficar_respuesta_filtro(
+        REPORTE.agregar_figura(
+            VISUALIZACION.graficar_respuesta_filtro(
                 b_pb,
                 sfreq,
                 f_pasabajos,
@@ -288,7 +304,7 @@ def ejecutar_pipeline(
         for frecuencia in (40.0, 50.0):
 
             simple, doble = (
-                Procesamiento.atenuacion_en(
+                VALIDACION.atenuacion_en(
                     b_pb,
                     sfreq,
                     frecuencia
@@ -301,21 +317,21 @@ def ejecutar_pipeline(
                 f"{doble:.2f} dB con filtfilt."
             )
 
-        dict_eeg_pb = Procesamiento.filtrar(
+        dict_eeg_pb = VALIDACION.filtrar(
             dict_eeg_pa,
             b_pb
         )
 
         _agregar_figuras(
-            Visualizacion_Inicial.graficar_canales_motores(
+            VISUALIZACION.graficar_canales_motores(
                 dict_eeg_pb,
                 canales=CANALES_ANALISIS,
                 titulo="Despues del pasabajos"
             )
         )
 
-        Reporte.agregar_figura(
-            Visualizacion_Inicial.graficar_psd(
+        REPORTE.agregar_figura(
+            VISUALIZACION.graficar_psd(
                 dict_eeg_pb,
                 canales=CANALES_ANALISIS,
                 titulo="PSD despues del pasabajos"
@@ -328,33 +344,33 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 3)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Etapa 4: Plataformas de fuerza y fases de marcha"
         )
 
-        dict_fz = Procesamiento.extraer_fz(
+        dict_fz = VALIDACION.extraer_fz(
             dict_fp
         )
 
         dict_fz_corregido = (
-            Procesamiento.corregir_offset(
+            VALIDACION.corregir_offset(
                 dict_fz
             )
         )
 
         _agregar_figuras(
-            Procesamiento.graficar_fz(
+            VISUALIZACION.graficar_fz(
                 dict_fz,
                 dict_fz_corregido
             )
         )
 
-        dict_eventos = Procesamiento.detectar_eventos(
+        dict_eventos = VALIDACION.detectar_eventos(
             dict_fz_corregido,
             umbral=umbral_contacto
         )
 
-        dict_fases = Procesamiento.etiquetar_fases(
+        dict_fases = VALIDACION.etiquetar_fases(
             dict_eventos,
             primer_ciclo=primer_ciclo
         )
@@ -376,7 +392,7 @@ def ejecutar_pipeline(
         for vel, inicio in inicio_analisis.items():
 
             _agregar_figuras(
-                Procesamiento.graficar_fases(
+                VISUALIZACION.graficar_fases(
                     {vel: dict_fz_corregido[vel]},
                     {vel: dict_eventos[vel]},
                     {vel: dict_fases[vel]},
@@ -390,7 +406,7 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 4)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Etapa 5: Segmentacion del EEG en ciclos "
             "y fases de marcha"
         )
@@ -400,7 +416,7 @@ def ejecutar_pipeline(
         )
 
         dict_fases_eeg = (
-            Procesamiento.alinear_fases_eeg(
+            VALIDACION.alinear_fases_eeg(
                 dict_eeg_pb,
                 dict_fases
             )
@@ -411,7 +427,7 @@ def ejecutar_pipeline(
             if vel in dict_fases_eeg:
 
                 _agregar_figuras(
-                    Procesamiento.graficar_eeg_fases(
+                    VISUALIZACION.graficar_eeg_fases(
                         {vel: dict_eeg_pb[vel]},
                         {vel: dict_fases_eeg[vel]},
                         canales=CANALES_ANALISIS,
@@ -419,7 +435,7 @@ def ejecutar_pipeline(
                     )
                 )
 
-        dict_ciclos = Procesamiento.segmentar_ciclos(
+        dict_ciclos = VALIDACION.segmentar_ciclos(
             dict_eeg_pb,
             dict_eventos,
             dict_fases,
@@ -432,7 +448,7 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 5)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Control de calidad de los ciclos de EEG"
         )
 
@@ -440,7 +456,7 @@ def ejecutar_pipeline(
             dict_ciclos_analisis,
             diagnostico_qc,
             figuras_qc
-        ) = Control_Calidad.controlar_calidad_ciclos(
+        ) = VALIDACION.controlar_calidad_ciclos(
             dict_eeg_pb,
             dict_ciclos,
             canales=CANALES_ANALISIS,
@@ -451,7 +467,7 @@ def ejecutar_pipeline(
         _agregar_figuras(figuras_qc)
 
         _agregar_figuras(
-            Procesamiento.graficar_ciclo_promedio(
+            VISUALIZACION.graficar_ciclo_promedio(
                 dict_ciclos_analisis,
                 canales=CANALES_ANALISIS
             )
@@ -463,7 +479,7 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 6)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Etapa 6: Analisis tiempo-frecuencia con STFT"
         )
 
@@ -479,7 +495,7 @@ def ejecutar_pipeline(
         )
 
         resultados_tf = (
-            Analisis_Espectral.analizar_tiempo_frecuencia(
+            FEATURES.analizar_tiempo_frecuencia(
                 dict_eeg_pb,
                 dict_ciclos_analisis,
                 canales=CANALES_ANALISIS,
@@ -494,27 +510,27 @@ def ejecutar_pipeline(
 
         # Figura A: espectrograma
         _agregar_figuras(
-            Analisis_Espectral.graficar_mapas_tiempo_frecuencia(
+            VISUALIZACION.graficar_mapas_tiempo_frecuencia(
                 resultados_tf
             )
         )
 
         # Figura B: potencia por bandas
         _agregar_figuras(
-            Analisis_Espectral.graficar_potencia_bandas(
+            VISUALIZACION.graficar_potencia_bandas(
                 resultados_tf
             )
         )
 
         # Figura C: comparacion entre fases
         resumen_fases = (
-            Analisis_Espectral.resumen_por_fase(
+            FEATURES.resumen_por_fase(
                 resultados_tf
             )
         )
 
         _agregar_figuras(
-            Analisis_Espectral.graficar_comparacion_fases(
+            VISUALIZACION.graficar_comparacion_fases(
                 resumen_fases
             )
         )
@@ -525,7 +541,7 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 7)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Etapa 7: GPM y prueba estadistica"
         )
 
@@ -540,7 +556,7 @@ def ejecutar_pipeline(
         )
 
         resultados_gpm, figuras_gpm = (
-            Analisis_Estadistico.analizar_gpm_permutaciones(
+            FEATURES.analizar_gpm_permutaciones(
                 dict_eeg_pb,
                 dict_ciclos_analisis,
                 canales=CANALES_ANALISIS,
@@ -570,7 +586,7 @@ def ejecutar_pipeline(
 
         _avisar_etapa(al_iniciar_etapa, 8)
 
-        Reporte.agregar_subtitulo(
+        REPORTE.agregar_subtitulo(
             "Etapa 8: OpenSim y comparacion con IMU"
         )
 
@@ -581,7 +597,7 @@ def ejecutar_pipeline(
             (
                 resultados_opensim,
                 figuras_opensim
-            ) = OpenSim_Marcha.integrar_opensim(
+            ) = INTERPRETACION.integrar_opensim(
                 sujeto_id,
                 dict_fz_corregido,
                 dict_eventos
@@ -601,7 +617,7 @@ def ejecutar_pipeline(
 
         # Restaurar la salida de la consola
         finalizar = getattr(
-            Reporte,
+            REPORTE,
             "finalizar_registro",
             None
         )
@@ -617,7 +633,7 @@ def ejecutar_pipeline(
 
     if completado and ruta_pdf is not None:
 
-        Reporte.guardar_pdf(
+        REPORTE.guardar_pdf(
             ruta_pdf,
             titulo=f"Resultados - Sujeto {sujeto_id}"
         )
@@ -627,7 +643,7 @@ def ejecutar_pipeline(
     # ======================================================
 
     obtener = getattr(
-        Reporte,
+        REPORTE,
         "obtener_elementos",
         None
     )
@@ -636,7 +652,7 @@ def ejecutar_pipeline(
         elementos = obtener()
     else:
         elementos = list(
-            getattr(Reporte, "_elementos", [])
+            getattr(REPORTE, "_elementos", [])
         )
 
     return {
@@ -660,7 +676,7 @@ def main():
     ejecutar_pipeline(
         sujeto_id="10",
         ruta_pdf=os.path.join(
-            Lectura.RAIZ_PROYECTO,
+            LECTURA.RAIZ_PROYECTO,
             "resultados.pdf"
         )
     )

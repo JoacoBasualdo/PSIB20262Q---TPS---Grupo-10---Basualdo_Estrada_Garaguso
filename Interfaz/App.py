@@ -27,13 +27,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from Funciones import Reporte
-from main import ETAPAS
+from Funciones import REPORTE
+from main import ETAPAS, CATEGORIAS_INTERFAZ, CATEGORIA_POR_PASO
 import estilo
 from dialogo_opensim import DialogoOpenSim
 from panel_parametros import PanelParametros
 from trabajador import Trabajador
-from vista_resultados import PestanaEtapa, agrupar_por_etapa
+from vista_resultados import PestanaEtapa, agrupar_por_categoria
 
 
 class VentanaPrincipal(QMainWindow):
@@ -129,10 +129,18 @@ class VentanaPrincipal(QMainWindow):
         disposicion.addLayout(encabezado)
 
         self.barra_progreso = QProgressBar()
-        self.barra_progreso.setRange(0, len(ETAPAS))
+        self.barra_progreso.setRange(0, len(CATEGORIAS_INTERFAZ))
         self.barra_progreso.setValue(0)
-        self.barra_progreso.setFormat("%v de %m etapas")
+        self.barra_progreso.setFormat("Etapa %v de %m")
         disposicion.addWidget(self.barra_progreso)
+
+        self.etiqueta_flujo = QLabel(
+            "Lectura  →  Visualización  →  Validación  →  "
+            "Features  →  Interpretación  →  Reporte"
+        )
+        self.etiqueta_flujo.setWordWrap(True)
+        self.etiqueta_flujo.setStyleSheet("color: #5B6B7B; font-size: 9pt;")
+        disposicion.addWidget(self.etiqueta_flujo)
 
         self.texto_salida = QPlainTextEdit()
         self.texto_salida.setReadOnly(True)
@@ -140,24 +148,41 @@ class VentanaPrincipal(QMainWindow):
 
         self.pestanas = QTabWidget()
         self.pestanas.addTab(self.texto_salida, "Consola")
+        self._crear_pestanas_vacias()
         disposicion.addWidget(self.pestanas)
 
         return panel
+
+    def _crear_pestanas_vacias(self):
+        """Mostrar desde el inicio las seis categorias del proyecto."""
+        for categoria in CATEGORIAS_INTERFAZ:
+            contenido = [("texto", "Los resultados apareceran al terminar el procesamiento.")]
+            if categoria == "REPORTE":
+                contenido = [("texto", "El resumen y la exportacion PDF estaran disponibles al finalizar.")]
+            self.pestanas.addTab(PestanaEtapa(categoria, contenido), categoria)
 
     def _limpiar_pestanas(self):
         while self.pestanas.count() > 1:
             pestana = self.pestanas.widget(1)
             self.pestanas.removeTab(1)
             pestana.deleteLater()
+        self._crear_pestanas_vacias()
         self.pestanas.setCurrentIndex(0)
 
     def _mostrar_resultados(self, vista):
-        for indice, (titulo, elementos) in enumerate(agrupar_por_etapa(vista)):
-            nombre = ETAPAS[indice] if indice < len(ETAPAS) else titulo
-            posicion = self.pestanas.addTab(PestanaEtapa(titulo, elementos), nombre)
-            self.pestanas.setTabToolTip(posicion, titulo)
-        if self.pestanas.count() > 1:
-            self.pestanas.setCurrentIndex(1)
+        # Sustituir los contenidos de las seis pestanas preexistentes.
+        while self.pestanas.count() > 1:
+            pestana = self.pestanas.widget(1)
+            self.pestanas.removeTab(1)
+            pestana.deleteLater()
+
+        for categoria, elementos in agrupar_por_categoria(
+                vista, CATEGORIAS_INTERFAZ, CATEGORIA_POR_PASO):
+            posicion = self.pestanas.addTab(
+                PestanaEtapa(categoria, elementos), categoria
+            )
+            self.pestanas.setTabToolTip(posicion, categoria)
+        self.pestanas.setCurrentIndex(1)
 
     def _al_solicitar_ejecucion(self, parametros):
         self._limpiar_pestanas()
@@ -167,6 +192,10 @@ class VentanaPrincipal(QMainWindow):
         self.boton_pdf.setEnabled(False)
         self.boton_opensim.setEnabled(False)
         self.barra_progreso.setValue(0)
+        self.etiqueta_flujo.setText(
+            "Lectura  →  Visualización  →  Validación  →  "
+            "Features  →  Interpretación  →  Reporte"
+        )
         self.panel_parametros.setEnabled(False)
         self.etiqueta_etapa.setText("Iniciando...")
         self.statusBar().showMessage(f"Procesando el paciente S{parametros['sujeto_id']}...")
@@ -187,8 +216,17 @@ class VentanaPrincipal(QMainWindow):
         self.hilo.start()
 
     def _al_iniciar_etapa(self, indice, nombre):
-        self.barra_progreso.setValue(indice)
-        self.etiqueta_etapa.setText(f"Etapa {indice + 1} de {len(ETAPAS)}: {nombre}")
+        indice_categoria = CATEGORIA_POR_PASO[indice]
+        categoria = CATEGORIAS_INTERFAZ[indice_categoria]
+        etapa_actual = indice_categoria + 1
+        total_etapas = len(CATEGORIAS_INTERFAZ)
+        self.barra_progreso.setValue(etapa_actual)
+        self.etiqueta_flujo.setText(
+            f"Etapa {etapa_actual} de {total_etapas} · {categoria}: {nombre}"
+        )
+        self.etiqueta_etapa.setText(
+            f"{categoria} (etapa {etapa_actual} de {total_etapas}): {nombre}"
+        )
 
     def _agregar_texto(self, texto):
         self.texto_salida.moveCursor(self.texto_salida.textCursor().MoveOperation.End)
@@ -200,8 +238,12 @@ class VentanaPrincipal(QMainWindow):
         self._mostrar_resultados(resultados["vista"])
         self.boton_pdf.setEnabled(True)
         self.boton_opensim.setEnabled(bool(resultados.get("opensim")))
-        self.barra_progreso.setValue(len(ETAPAS))
-        self.etiqueta_etapa.setText("Procesamiento terminado.")
+        self.barra_progreso.setValue(len(CATEGORIAS_INTERFAZ))
+        self.etiqueta_etapa.setText(
+            f"Procesamiento terminado ({len(CATEGORIAS_INTERFAZ)} de "
+            f"{len(CATEGORIAS_INTERFAZ)} etapas)."
+        )
+        self.etiqueta_flujo.setText("Procesamiento completado. Resultados y PDF disponibles.")
         self.statusBar().showMessage(f"Terminado en {duracion:.0f} s")
 
     def _al_fallar(self, mensaje, detalle):
@@ -245,7 +287,7 @@ class VentanaPrincipal(QMainWindow):
         self.statusBar().showMessage("Guardando el PDF...")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            Reporte.guardar_pdf(ruta, titulo=f"Resultados - Sujeto {self.parametros['sujeto_id']}")
+            REPORTE.guardar_pdf(ruta, titulo=f"Resultados - Sujeto {self.parametros['sujeto_id']}")
         except PermissionError:
             QApplication.restoreOverrideCursor()
             QMessageBox.warning(

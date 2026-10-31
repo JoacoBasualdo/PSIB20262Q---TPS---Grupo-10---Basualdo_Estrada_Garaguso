@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from Funciones import OpenSim_Marcha
+from Funciones import INTERPRETACION
 
 PATRONES_OPENSIM = [
     r"C:\OpenSim *\bin\OpenSim64.exe",
@@ -33,7 +33,7 @@ def buscar_opensim_gui():
 
 def rutas_simulacion(sujeto_id, resultados_opensim):
     ruta_modelo = os.path.join(
-        OpenSim_Marcha.CARPETA_OPENSIM,
+        INTERPRETACION.CARPETA_OPENSIM,
         f"S{sujeto_id}",
         f"gait2392_S{sujeto_id}_escalado.osim"
     )

@@ -1,34 +1,25 @@
+"""Extraccion espectral mediante STFT y analisis GPM.
 
+Los calculos originales se han conservado sin modificaciones.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
-
-from matplotlib.colors import TwoSlopeNorm
-from scipy.interpolate import interp1d
 from scipy.signal import stft
-
-from .Procesamiento import FASES, COLORES_FASES
-
-
-# ==========================================================
-# CONFIGURACION DE BANDAS
-# ==========================================================
+from scipy.interpolate import interp1d
+from .VALIDACION import FS_FP, FASES, COLORES_FASES
 
 BANDAS = {
     "Mu (8-13 Hz)": (8, 13),
     "Beta (13-30 Hz)": (13, 30),
     "Gamma baja (24-40 Hz)": (24, 40),
 }
-
 COLORES_BANDAS = {
     "Mu (8-13 Hz)": "tab:blue",
     "Beta (13-30 Hz)": "tab:orange",
     "Gamma baja (24-40 Hz)": "tab:green",
 }
 
-
-# ==========================================================
-# FUNCIONES AUXILIARES
-# ==========================================================
+# === Caracteristicas espectrales STFT ===
 
 def _fases_comunes(fases_por_ciclo):
     """Determina la fase mas frecuente en cada punto del ciclo."""
@@ -40,51 +31,6 @@ def _fases_comunes(fases_por_ciclo):
         ).argmax() - 1
         for columna in fases_por_ciclo.T
     ])
-
-
-def _sombrear_fases(ax, porcentaje, fases):
-
-    limites = np.r_[
-        0,
-        np.flatnonzero(np.diff(fases)) + 1,
-        len(fases)
-    ]
-
-    for a, b in zip(limites[:-1], limites[1:]):
-
-        if 0 <= fases[a] < len(FASES):
-
-            fin = (
-                porcentaje[b]
-                if b < len(porcentaje)
-                else 100.0
-            )
-
-            ax.axvspan(
-                porcentaje[a],
-                fin,
-                color=COLORES_FASES[fases[a]],
-                alpha=0.15,
-                linewidth=0
-            )
-
-
-def _lineas_fases(ax, porcentaje, fases):
-
-    for i in np.flatnonzero(np.diff(fases)) + 1:
-
-        ax.axvline(
-            porcentaje[i],
-            color="black",
-            ls=":",
-            lw=0.8,
-            alpha=0.65
-        )
-
-
-# ==========================================================
-# TRANSFORMADA DE FOURIER DE TIEMPO CORTO (STFT)
-# ==========================================================
 
 def calcular_stft_continua(
         eeg_microvoltios,
@@ -204,11 +150,6 @@ def calcular_stft_continua(
         tiempos,
         zxx[:, seleccion, :]
     )
-
-
-# ==========================================================
-# ANALISIS TIEMPO-FRECUENCIA
-# ==========================================================
 
 def analizar_tiempo_frecuencia(
         dict_eeg,
@@ -456,183 +397,6 @@ def analizar_tiempo_frecuencia(
 
     return resultados
 
-
-# ==========================================================
-# FIGURA A: ESPECTROGRAMAS STFT
-# ==========================================================
-
-def graficar_mapas_tiempo_frecuencia(resultados):
-
-    figuras = []
-
-    for vel, res in resultados.items():
-
-        mapas = res["potencia_relativa"]
-
-        limite = max(
-            30,
-            float(np.percentile(mapas, 98))
-        )
-
-        fig, ejes = plt.subplots(
-            len(res["canales"]),
-            1,
-            figsize=(8.27, 10),
-            sharex=True,
-            constrained_layout=True
-        )
-
-        ejes = np.atleast_1d(ejes)
-
-        for i, (ax, canal) in enumerate(
-            zip(ejes, res["canales"])
-        ):
-
-            img = ax.pcolormesh(
-                res["porcentaje"],
-                res["frecuencias"],
-                mapas[i],
-                shading="auto",
-                cmap="RdBu_r",
-                norm=TwoSlopeNorm(
-                    vmin=-100,
-                    vcenter=0,
-                    vmax=limite
-                )
-            )
-
-            _lineas_fases(
-                ax,
-                res["porcentaje"],
-                res["fases_comunes"]
-            )
-
-            ax.set_ylabel(
-                f"{canal}\nHz",
-                fontsize=9
-            )
-
-            ax.set_ylim(
-                res["frecuencias"][0],
-                res["frecuencias"][-1]
-            )
-
-        ejes[-1].set_xlabel(
-            "Ciclo de marcha (%)"
-        )
-        ejes[-1].set_xlim(0, 100)
-
-        fig.colorbar(
-            img,
-            ax=ejes,
-            shrink=0.7,
-            pad=0.02,
-            label="Cambio frente a la potencia media de marcha (%)"
-        )
-
-        fig.suptitle(
-            f"STFT: espectrograma del ciclo de marcha "
-            f"- {vel} m/s\n"
-            f"{res['n_ciclos']} ciclos",
-            fontsize=11
-        )
-
-        figuras.append(fig)
-
-    return figuras
-
-
-# ==========================================================
-# FIGURA B: POTENCIA MU, BETA Y GAMMA
-# ==========================================================
-
-def graficar_potencia_bandas(resultados):
-
-    figuras = []
-
-    for vel, res in resultados.items():
-
-        fig, ejes = plt.subplots(
-            len(res["canales"]),
-            1,
-            figsize=(8.27, 10),
-            sharex=True,
-            constrained_layout=True
-        )
-
-        ejes = np.atleast_1d(ejes)
-
-        for i, (ax, canal) in enumerate(
-            zip(ejes, res["canales"])
-        ):
-
-            _sombrear_fases(
-                ax,
-                res["porcentaje"],
-                res["fases_comunes"]
-            )
-
-            for nombre, datos in res["bandas"].items():
-
-                media = datos["media"][i]
-                desvio = datos["desvio"][i]
-
-                ax.plot(
-                    res["porcentaje"],
-                    media,
-                    color=COLORES_BANDAS[nombre],
-                    label=nombre,
-                    lw=1.2
-                )
-
-                ax.fill_between(
-                    res["porcentaje"],
-                    media - desvio,
-                    media + desvio,
-                    color=COLORES_BANDAS[nombre],
-                    alpha=0.12,
-                    lw=0
-                )
-
-            ax.axhline(
-                0,
-                ls=":",
-                color="black",
-                lw=0.8
-            )
-
-            ax.set_ylabel(
-                f"{canal}\nCambio (%)",
-                fontsize=9
-            )
-            ax.grid(alpha=0.2)
-
-        ejes[0].legend(
-            fontsize=7,
-            loc="upper right"
-        )
-
-        ejes[-1].set_xlabel(
-            "Ciclo de marcha (%)"
-        )
-        ejes[-1].set_xlim(0, 100)
-
-        fig.suptitle(
-            f"Potencia mu, beta y gamma baja (STFT) "
-            f"- {vel} m/s\n"
-            f"Media +/- DE de {res['n_ciclos']} ciclos",
-            fontsize=11
-        )
-
-        figuras.append(fig)
-
-    return figuras
-
-
-# ==========================================================
-# RESUMEN DE POTENCIA POR FASE
-# ==========================================================
-
 def resumen_por_fase(resultados):
 
     resumen = {}
@@ -704,114 +468,463 @@ def resumen_por_fase(resultados):
 
 
 # ==========================================================
-# FIGURA C: COMPARACION ENTRE FASES
+# GPM Y MAX-T: extraccion de caracteristicas (sin cambios numericos)
 # ==========================================================
+# ==========================================================
+def analizar_gpm_permutaciones(
+        dict_eeg,
+        dict_ciclos,
+        canales=("C3", "Cz", "C4", "P3", "Pz", "P4"),
+        fmin=8.0,
+        fmax=40.0,
+        paso=1.0,
+        ventana_s=0.5,
+        solapamiento=0.90,
+        n_puntos=100,
+        n_permutaciones=10000,
+        semilla=42):
 
-def graficar_comparacion_fases(resumen):
+    """
+    Analiza la modulacion de amplitud del EEG
+    sincronizada con el ciclo de marcha.
 
+    Utiliza amplitudes espectrales obtenidas
+    mediante STFT.
+
+    El GPM corresponde al segundo armonico del
+    ciclo completo, es decir, dos periodos de
+    modulacion por zancada.
+
+    La significancia se evalua mediante:
+        - Desplazamientos circulares por ciclo.
+        - 10000 permutaciones por defecto.
+        - Correccion max-T.
+        - FWER del 5%.
+
+    Se utilizan los seis canales:
+    C3, Cz, C4, P3, Pz y P4.
+
+    La significancia estadistica no demuestra
+    por si sola un origen neuronal.
+    """
+
+    if (
+        n_puntos < 10
+        or n_permutaciones < 1
+    ):
+        raise ValueError(
+            "n_puntos >= 10 y n_permutaciones >= 1"
+        )
+
+    bandas = {
+        "Mu (8-13 Hz)": (8, 13, False),
+        "Beta (13-30 Hz)": (13, 30, False),
+        "Gamma baja (24-40 Hz)": (24, 40, True)
+    }
+
+    rng = np.random.default_rng(semilla)
+
+    resultados = {}
     figuras = []
 
-    for vel, filas in resumen.items():
+    # ======================================================
+    # ANALISIS POR VELOCIDAD
+    # ======================================================
 
-        canales = list(
-            dict.fromkeys(
-                fila["canal"]
-                for fila in filas
+    for vel, info_ciclos in dict_ciclos.items():
+
+        if (
+            vel not in dict_eeg
+            or not len(info_ciclos.get("intervalos", []))
+        ):
+            continue
+
+        raw = dict_eeg[vel].copy().pick(
+            list(canales)
+        )
+
+        sfreq = float(raw.info["sfreq"])
+
+        # ==================================================
+        # PASO 1: AMPLITUD MEDIANTE STFT
+        # ==================================================
+
+        frecuencias, tiempos_stft, zxx = (
+            calcular_stft_continua(
+                raw.get_data() * 1e6,
+                sfreq,
+                fmin=fmin,
+                fmax=fmax,
+                paso=paso,
+                ventana_s=ventana_s,
+                solapamiento=solapamiento
             )
         )
 
+        # El GPM utiliza amplitud, no potencia
+        amplitud = np.abs(zxx)
+
+        del zxx
+
+        # Interpolador sobre tiempos de STFT
+        interpolador = interp1d(
+            tiempos_stft,
+            amplitud,
+            axis=-1,
+            kind="linear",
+            bounds_error=True,
+            assume_sorted=True
+        )
+
+        # ==================================================
+        # PASO 2: SEGMENTACION DE CICLOS
+        # ==================================================
+
+        porcentajes = (
+            np.arange(n_puntos) / n_puntos
+        )
+
+        mapas = []
+
+        for t0, t1 in info_ciclos["intervalos"]:
+
+            if (
+                t0 < 0
+                or t1 <= t0
+                or t1 > raw.n_times / sfreq
+            ):
+                raise ValueError(
+                    f"{vel}: ciclo EEG invalido "
+                    f"{t0:.3f}-{t1:.3f} s"
+                )
+
+            instantes = (
+                t0
+                + (t1 - t0) * porcentajes
+            )
+
+            mapas.append(
+                interpolador(instantes)
+            )
+
+        # Dimensiones:
+        # ciclos x canales x frecuencias x puntos
+        amp = np.asarray(
+            mapas,
+            dtype=np.float64
+        )
+
+        n_ciclos, n_canales, n_frecuencias, _ = (
+            amp.shape
+        )
+
+        if n_ciclos < 3:
+            raise ValueError(
+                f"{vel}: se requieren al menos "
+                "3 ciclos validos."
+            )
+
+        # ==================================================
+        # PASO 3: CALCULO DEL GPM
+        # ==================================================
+
+        sigma = amp.std(
+            axis=(0, 3),
+            ddof=0
+        )
+
+        # Segundo armonico del ciclo
+        fases = np.exp(
+            -4j * np.pi * porcentajes
+        )
+
+        # Coeficiente complejo de cada ciclo
+        coef_ciclo = np.einsum(
+            "kcfp,p->kcf",
+            amp,
+            fases,
+            optimize=True
+        ) / n_puntos
+
+        escala = (
+            np.sqrt(2.0)
+            / np.maximum(sigma, 1e-12)
+        )
+
+        # GPM complejo promedio
+        gpm_complejo = (
+            coef_ciclo.mean(axis=0)
+            * escala
+        )
+
+        # Magnitud del GPM
+        gpm = np.abs(gpm_complejo)
+
+        # ==================================================
+        # PASO 4: PERMUTACIONES
+        # ==================================================
+
+        coef_flat = coef_ciclo.reshape(
+            n_ciclos, -1
+        )
+
+        escala_flat = escala.ravel()
+        gpm_flat = gpm.ravel()
+
+        superaciones_sin = np.zeros(
+            gpm_flat.size,
+            dtype=np.int64
+        )
+
+        maximos_nulos = np.empty(
+            n_permutaciones,
+            dtype=float
+        )
+
+        bloque = 250
+
+        for inicio in range(
+            0, n_permutaciones, bloque
+        ):
+
+            fin = min(
+                inicio + bloque,
+                n_permutaciones
+            )
+
+            # Desplazamientos independientes por ciclo
+            shifts = rng.integers(
+                0,
+                n_puntos,
+                size=(fin - inicio, n_ciclos)
+            )
+
+            giros = np.exp(
+                -4j * np.pi
+                * shifts / n_puntos
+            )
+
+            # Distribucion nula del GPM
+            gpm_nulo = np.abs(
+                (giros @ coef_flat)
+                / n_ciclos
+                * escala_flat
+            )
+
+            superaciones_sin += (
+                gpm_nulo >= gpm_flat[None, :]
+            ).sum(axis=0)
+
+            maximos_nulos[inicio:fin] = (
+                gpm_nulo.max(axis=1)
+            )
+
+        # ==================================================
+        # PASO 5: SIGNIFICANCIA ESTADISTICA
+        # ==================================================
+
+        p_sin = (
+            (superaciones_sin + 1)
+            / (n_permutaciones + 1)
+        ).reshape(gpm.shape)
+
+        maximos_ordenados = np.sort(
+            maximos_nulos
+        )
+
+        superaciones_corr = (
+            n_permutaciones
+            - np.searchsorted(
+                maximos_ordenados,
+                gpm_flat,
+                side="left"
+            )
+        )
+
+        p_corr = (
+            (superaciones_corr + 1)
+            / (n_permutaciones + 1)
+        ).reshape(gpm.shape)
+
+        umbral = float(
+            np.percentile(
+                maximos_nulos,
+                95
+            )
+        )
+
+        significativo = p_corr < 0.05
+
+        # ==================================================
+        # PASO 6: GUARDAR RESULTADOS
+        # ==================================================
+
+        resultados[vel] = {
+            "canales": raw.ch_names,
+            "frecuencias": frecuencias,
+            "n_ciclos": n_ciclos,
+            "gpm": gpm,
+            "gpm_complejo": gpm_complejo,
+            "p_sin_corregir": p_sin,
+            "p_corregido": p_corr,
+            "significativo": significativo,
+            "umbral_maxT_95": umbral,
+            "n_permutaciones": n_permutaciones,
+            "metodo": "STFT"
+        }
+
+        # ==================================================
+        # PASO 7: MOSTRAR RESULTADOS
+        # ==================================================
+
+        print(
+            f"\nGPM {vel} m/s: "
+            f"{n_ciclos} ciclos; "
+            f"{n_canales} canales x "
+            f"{n_frecuencias} frecuencias "
+            f"= {gpm_flat.size} pruebas; "
+            f"{n_permutaciones} permutaciones"
+        )
+
+        print(
+            f"  Umbral max-T (95 %): "
+            f"{umbral:.4f}"
+        )
+
+        print(
+            "  Banda                      Canal  "
+            "Pico(Hz)    GPM   p ajustado  Sig"
+        )
+
+        for nombre, (a, b, incluye_fin) in bandas.items():
+
+            mascara = (
+                (frecuencias >= a)
+                & (
+                    (frecuencias <= b)
+                    if incluye_fin
+                    else (frecuencias < b)
+                )
+            )
+
+            indices = np.flatnonzero(mascara)
+
+            if not indices.size:
+                continue
+
+            for ic, canal in enumerate(raw.ch_names):
+
+                j = indices[
+                    np.argmax(gpm[ic, indices])
+                ]
+
+                print(
+                    f"  {nombre:<26}"
+                    f"{canal:<6}"
+                    f"{frecuencias[j]:>7.0f} "
+                    f"{gpm[ic, j]:>8.3f} "
+                    f"{p_corr[ic, j]:>10.4f} "
+                    f"{'SI' if significativo[ic, j] else 'NO'}"
+                )
+
+        print(
+            f"  Significativos: "
+            f"{significativo.sum()} "
+            f"de {gpm_flat.size}"
+        )
+
+        # ==================================================
+        # PASO 8: GRAFICO DEL GPM
+        # ==================================================
+
         fig, ejes = plt.subplots(
-            len(canales),
+            n_canales,
             1,
-            figsize=(8.27, 10),
+            figsize=(8.27, 12),
             sharex=True,
             constrained_layout=True
         )
 
         ejes = np.atleast_1d(ejes)
 
-        x = np.arange(len(FASES))
-
-        ancho = min(
-            0.24,
-            0.8 / len(BANDAS)
-        )
-
         for ic, (ax, canal) in enumerate(
-            zip(ejes, canales)
+            zip(ejes, raw.ch_names)
         ):
 
-            for ib, nombre in enumerate(BANDAS):
+            # Sombreado visual sin superposicion: la banda gamma baja
+            # mantiene el mismo color entre 24 y 40 Hz. Los calculos
+            # estadisticos conservan beta 13-30 Hz y gamma 24-40 Hz.
+            for nombre, (a, b, _) in bandas.items():
 
-                filas_banda = [
-                    fila
-                    for fila in filas
-                    if fila["canal"] == canal
-                    and fila["banda"] == nombre
-                ]
-
-                medias = [
-                    fila["media"]
-                    for fila in filas_banda
-                ]
-
-                desvios = [
-                    fila["de"]
-                    for fila in filas_banda
-                ]
-
-                ax.bar(
-                    x + (
-                        ib - (len(BANDAS) - 1) / 2
-                    ) * ancho,
-                    medias,
-                    width=ancho,
-                    yerr=desvios,
-                    capsize=2,
+                fin_sombreado = (
+                    min(b, bandas["Gamma baja (24-40 Hz)"][0])
+                    if nombre.startswith("Beta") else b
+                )
+                ax.axvspan(
+                    a,
+                    fin_sombreado,
                     color=COLORES_BANDAS[nombre],
-                    alpha=0.8,
+                    alpha=0.08,
                     label=nombre if ic == 0 else None
                 )
 
-            ax.axhline(
-                0,
+            ax.plot(
+                frecuencias,
+                gpm[ic],
+                "-o",
+                ms=2.5,
+                lw=1,
                 color="black",
-                lw=0.7
+                label="GPM" if ic == 0 else None
+            )
+
+            ax.axhline(
+                umbral,
+                color="tab:red",
+                ls="--",
+                lw=1,
+                label="Umbral max-T"
+                if ic == 0 else None
+            )
+
+            ax.scatter(
+                frecuencias[significativo[ic]],
+                gpm[ic, significativo[ic]],
+                s=24,
+                color="tab:red",
+                zorder=4,
+                label="Significativo"
+                if ic == 0 else None
             )
 
             ax.set_ylabel(
-                f"{canal}\nCambio (%)",
+                f"{canal}\n|GPM|",
                 fontsize=9
             )
 
-            ax.grid(
-                axis="y",
-                alpha=0.2
-            )
+            ax.grid(alpha=0.25)
 
-        ejes[-1].set_xticks(
-            x,
-            [
-                "Doble apoyo\ninicial",
-                "Apoyo simple",
-                "Doble apoyo\nfinal",
-                "Balanceo"
-            ]
-        )
+        ejes[-1].set_xlim(fmin, fmax)
 
         ejes[-1].set_xlabel(
-            "Fase de marcha (pie derecho)"
+            "Frecuencia EEG (Hz)"
         )
 
-        ejes[0].legend(fontsize=7)
+        ejes[0].legend(
+            loc="upper right",
+            ncol=2,
+            fontsize=7
+        )
 
         fig.suptitle(
-            f"Potencia STFT por fase de marcha "
-            f"- {vel} m/s\n"
-            "Media +/- DE de ciclos validos",
+            f"GPM de amplitudes STFT - {vel} m/s\n"
+            f"{n_ciclos} ciclos, "
+            f"{n_permutaciones} permutaciones; "
+            "FWER 5 %",
             fontsize=11
         )
 
         figuras.append(fig)
 
-    return figuras
+    return resultados, figuras
+

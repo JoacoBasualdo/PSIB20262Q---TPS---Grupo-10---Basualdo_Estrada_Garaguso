@@ -5,7 +5,7 @@ import traceback
 
 from PySide6.QtCore import QObject, Signal
 
-from Funciones import Reporte
+from Funciones import REPORTE
 from main import ejecutar_pipeline
 
 
@@ -75,7 +75,7 @@ class Trabajador(QObject):
         consola_original = sys.stdout
         inicio = time.perf_counter()
         try:
-            Reporte.cambiar_consola(_EmisorTexto(self.texto_emitido))
+            REPORTE.cambiar_consola(_EmisorTexto(self.texto_emitido))
             resultados = ejecutar_pipeline(
                 **self.parametros,
                 al_iniciar_etapa=self.etapa_iniciada.emit
@@ -89,6 +89,6 @@ class Trabajador(QObject):
         finally:
             sys.stdout = consola_original
             try:
-                Reporte.cambiar_consola(consola_original)
+                REPORTE.cambiar_consola(consola_original)
             except AttributeError:
                 pass
