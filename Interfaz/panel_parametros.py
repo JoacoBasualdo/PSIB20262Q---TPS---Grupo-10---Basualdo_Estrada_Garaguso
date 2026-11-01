@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from Funciones import LECTURA
+from Funciones import Lectura
 from main import ejecutar_pipeline
 
 VALORES_POR_DEFECTO = {
@@ -41,7 +41,7 @@ class PanelParametros(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.pacientes = LECTURA.listar_pacientes()
+        self.pacientes = Lectura.listar_pacientes()
 
         disposicion = QVBoxLayout(self)
         disposicion.addWidget(self._crear_grupo_paciente())
@@ -71,7 +71,7 @@ class PanelParametros(QWidget):
 
         fila_velocidades = QHBoxLayout()
         self.casillas_velocidad = {}
-        for vel in LECTURA.VELOCIDADES:
+        for vel in Lectura.VELOCIDADES:
             casilla = QCheckBox(f"{vel} m/s")
             self.casillas_velocidad[vel] = casilla
             fila_velocidades.addWidget(casilla)

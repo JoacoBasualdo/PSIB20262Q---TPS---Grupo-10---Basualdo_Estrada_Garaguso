@@ -27,13 +27,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from Funciones import REPORTE
+from Funciones import Reporte
 from main import ETAPAS, CATEGORIAS_INTERFAZ, CATEGORIA_POR_PASO
 import estilo
 from dialogo_opensim import DialogoOpenSim
 from panel_parametros import PanelParametros
 from trabajador import Trabajador
 from vista_resultados import PestanaEtapa, agrupar_por_categoria
+
+NOMBRES_VISIBLES = {
+    "LECTURA": "Lectura",
+    "VISUALIZACION": "Visualización",
+    "ACONDICIONAMIENTO": "Acondicionamiento",
+    "FEATURES": "Features",
+    "INTERPRETACION": "Interpretación",
+    "REPORTE": "Reporte",
+}
+
+
+def nombre_visible(categoria):
+    return NOMBRES_VISIBLES.get(categoria, categoria.capitalize())
 
 
 class VentanaPrincipal(QMainWindow):
@@ -135,7 +148,7 @@ class VentanaPrincipal(QMainWindow):
         disposicion.addWidget(self.barra_progreso)
 
         self.etiqueta_flujo = QLabel(
-            "Lectura  →  Visualización  →  Validación  →  "
+            "Lectura  →  Visualización  →  Acondicionamiento  →  "
             "Features  →  Interpretación  →  Reporte"
         )
         self.etiqueta_flujo.setWordWrap(True)
@@ -159,7 +172,8 @@ class VentanaPrincipal(QMainWindow):
             contenido = [("texto", "Los resultados apareceran al terminar el procesamiento.")]
             if categoria == "REPORTE":
                 contenido = [("texto", "El resumen y la exportacion PDF estaran disponibles al finalizar.")]
-            self.pestanas.addTab(PestanaEtapa(categoria, contenido), categoria)
+            nombre = nombre_visible(categoria)
+            self.pestanas.addTab(PestanaEtapa(nombre, contenido), nombre)
 
     def _limpiar_pestanas(self):
         while self.pestanas.count() > 1:
@@ -178,10 +192,11 @@ class VentanaPrincipal(QMainWindow):
 
         for categoria, elementos in agrupar_por_categoria(
                 vista, CATEGORIAS_INTERFAZ, CATEGORIA_POR_PASO):
+            nombre = nombre_visible(categoria)
             posicion = self.pestanas.addTab(
-                PestanaEtapa(categoria, elementos), categoria
+                PestanaEtapa(nombre, elementos), nombre
             )
-            self.pestanas.setTabToolTip(posicion, categoria)
+            self.pestanas.setTabToolTip(posicion, nombre)
         self.pestanas.setCurrentIndex(1)
 
     def _al_solicitar_ejecucion(self, parametros):
@@ -193,7 +208,7 @@ class VentanaPrincipal(QMainWindow):
         self.boton_opensim.setEnabled(False)
         self.barra_progreso.setValue(0)
         self.etiqueta_flujo.setText(
-            "Lectura  →  Visualización  →  Validación  →  "
+            "Lectura  →  Visualización  →  Acondicionamiento  →  "
             "Features  →  Interpretación  →  Reporte"
         )
         self.panel_parametros.setEnabled(False)
@@ -217,7 +232,7 @@ class VentanaPrincipal(QMainWindow):
 
     def _al_iniciar_etapa(self, indice, nombre):
         indice_categoria = CATEGORIA_POR_PASO[indice]
-        categoria = CATEGORIAS_INTERFAZ[indice_categoria]
+        categoria = nombre_visible(CATEGORIAS_INTERFAZ[indice_categoria])
         etapa_actual = indice_categoria + 1
         total_etapas = len(CATEGORIAS_INTERFAZ)
         self.barra_progreso.setValue(etapa_actual)
@@ -287,7 +302,7 @@ class VentanaPrincipal(QMainWindow):
         self.statusBar().showMessage("Guardando el PDF...")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            REPORTE.guardar_pdf(ruta, titulo=f"Resultados - Sujeto {self.parametros['sujeto_id']}")
+            Reporte.guardar_pdf(ruta, titulo=f"Resultados - Sujeto {self.parametros['sujeto_id']}")
         except PermissionError:
             QApplication.restoreOverrideCursor()
             QMessageBox.warning(

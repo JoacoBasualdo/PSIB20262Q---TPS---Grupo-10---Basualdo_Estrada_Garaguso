@@ -19,8 +19,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import welch, correlate, argrelextrema
 
-from .LECTURA import RAIZ_PROYECTO
-from .FEATURES import FS_FP
+from .Lectura import RAIZ_PROYECTO
+from .Features import FS_FP
 
 try:
     import opensim as osim
