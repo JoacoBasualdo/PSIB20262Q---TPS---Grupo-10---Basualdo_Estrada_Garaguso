@@ -599,9 +599,14 @@ def ejecutar_pipeline(
                 "despegues decodificados del EEG."
             )
             print(
-                "  - Las plataformas no generan movimiento: se usan "
-                "como etiquetas del decodificador (validacion cruzada "
-                "por 5 bloques de tiempo) y para el desfase con los IMU."
+                "  - Sin machine learning: la fase de la marcha se "
+                "obtiene del EEG con un filtro angosto en la frecuencia "
+                "de zancada y la transformada de Hilbert."
+            )
+            print(
+                "  - Las plataformas no generan movimiento: solo dan un "
+                "angulo de calibracion por evento (primeros 20 s) y el "
+                "desfase con los IMU."
             )
             print(
                 "  - Version 'baja' (0.3-4 Hz): incluye el artefacto "

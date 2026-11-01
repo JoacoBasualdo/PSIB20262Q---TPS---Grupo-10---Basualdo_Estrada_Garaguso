@@ -3,8 +3,9 @@ Integracion con OpenSim y comparacion con los IMU (Xsens MVN Awinda).
 
 Flujo (el .mot se genera solo con el EEG):
   1. Frecuencia de marcha: PSD (Welch) del EEG en C3, Cz y C4.
-  2. Decodificacion: contactos y despegues de cada pie a partir del EEG
-     (regresion ridge; las plataformas solo como etiquetas de entrenamiento).
+  2. Decodificacion: contactos y despegues de cada pie a partir de la fase
+     instantanea del EEG (filtro angosto + Hilbert), sin machine learning; las
+     plataformas solo dan un angulo de calibracion por evento.
   3. Antropometria: subject-info.csv -> factores de escala por segmento.
   4. Modelo personalizado: gait2392 escalado con la API de OpenSim.
   5. .mot: plantilla cinematica de referencia deformada en el tiempo con los
@@ -18,9 +19,7 @@ import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.signal import (welch, correlate, argrelextrema, butter, filtfilt,
-                          hilbert, resample_poly)
-from sklearn.linear_model import Ridge
+from scipy.signal import welch, correlate, argrelextrema, butter, filtfilt, hilbert
 
 from .Lectura import RAIZ_PROYECTO
 from .Features import FS_FP
@@ -1022,21 +1021,24 @@ def _figura_frecuencias(frecuencias, vel, fuente="EEG"):
 # ==========================================================
 # 10. DECODIFICACION DE LA MARCHA A PARTIR DEL EEG
 # ==========================================================
-# El .mot se genera solo con eventos decodificados del EEG. Una regresion ridge
-# predice la fase del ciclo de cada evento (contacto y despegue de cada pie)
-# como seno y coseno, y los eventos salen donde la fase vuelve a cero.
-# Las plataformas se usan solo como etiquetas: con validacion cruzada por 5
-# bloques de tiempo, ningun tramo se decodifica con un modelo entrenado con el.
+# El .mot se genera solo con eventos decodificados del EEG, sin machine
+# learning: solo procesamiento de senales.
+#   1. Se obtiene la frecuencia de zancada del propio EEG (pico de la PSD).
+#   2. El EEG se filtra en una banda angosta alrededor de esa frecuencia: queda
+#      casi una senoidal que sube y baja una vez por zancada.
+#   3. Con la transformada de Hilbert se obtiene su fase instantanea (0-360°).
+#   4. Calibracion: en los primeros 20 s se mide en que fase esta el EEG cuando
+#      ocurre cada evento (un angulo por evento). Es la unica informacion que se
+#      toma de las plataformas.
+#   5. Cada vez que la fase del EEG vuelve a pasar por ese angulo, hay un evento.
 # Version "baja" (0.3-4 Hz): incluye el artefacto de movimiento de cada paso.
 # Version "cortical" (envolvente de mu, beta y gamma baja): lo mas cercano a
 # actividad cerebral. Compararlas muestra cuanto es cerebro y cuanto movimiento.
 
 CANALES = ["F3", "Fz", "F4", "C3", "Cz", "C4", "P3", "Pz", "P4"]
-FS_DECOD = 20             # Hz: frecuencia de trabajo del decodificador
-VENTANA_S = 0.5           # s: contexto antes y despues de cada instante
-N_BLOQUES = 5
-ALFA_RIDGE = 10.0
-BANDAS_CORTICALES = [(8, 13), (13, 30), (24, 40)]
+BANDAS_CORTICALES = {"mu": (8, 13), "beta": (13, 30), "gamma baja": (24, 40)}
+T_CALIBRACION = 20.0      # s: tramo inicial donde se calibra el angulo de cada evento
+ANCHO_BANDA = 0.2         # filtro angosto: frecuencia de zancada +-20 %
 
 VERSIONES = {
     "baja": "EEG 0.3-4 Hz (movimiento + EEG)",
@@ -1047,7 +1049,7 @@ TIPOS = {"contactos": "Contacto", "despegues": "Despegue"}
 
 
 # ==========================================================
-# CARACTERISTICAS DEL EEG
+# SENALES DEL EEG
 # ==========================================================
 
 # Obtiene la matriz de los 9 canales en microVolts
@@ -1056,36 +1058,42 @@ def _datos_eeg(raw, canales=CANALES):
     canales = [c for c in canales if c in raw.ch_names]
     return raw.get_data(picks=canales) * 1e6, raw.info["sfreq"], canales
 
+
+# Envolvente de una banda: filtrado, amplitud con Hilbert, suavizado a 4 Hz,
+# logaritmo y normalizacion (media 0, desvio 1) para poder sumar bandas
+def _envolvente(x, fs, fmin, fmax):
+    b, a = butter(4, [fmin, fmax], btype="band", fs=fs)
+    envolvente = np.abs(hilbert(filtfilt(b, a, x, axis=-1), axis=-1))
+    b_suave, a_suave = butter(2, 4.0, fs=fs)
+    envolvente = np.log(np.maximum(filtfilt(b_suave, a_suave, envolvente, axis=-1), 1e-3))
+    media = envolvente.mean(axis=-1, keepdims=True)
+    desvio = envolvente.std(axis=-1, keepdims=True)
+    return (envolvente - media) / desvio
+
+
 # Versión con artefactos de movimiento
-def caracteristicas_baja(raw):
-    """EEG filtrado 0.3-4 Hz y llevado a 20 Hz."""
-    x, fs, _ = _datos_eeg(raw)
+def senal_baja(raw):
+    """EEG de los 9 canales filtrado entre 0.3 y 4 Hz."""
+    x, fs, canales = _datos_eeg(raw)
     b, a = butter(2, [0.3, 4.0], btype="band", fs=fs)
-    return resample_poly(filtfilt(b, a, x, axis=1), FS_DECOD, int(fs), axis=1)
+    return filtfilt(b, a, x, axis=1), fs, canales
+
 
 # Versión filtrada (sin artefactos de movimiento)
-def caracteristicas_cortical(raw):
-    """Envolvente (log) de mu, beta y gamma baja, suavizada a 4 Hz y llevada a 20 Hz."""
-    x, fs, _ = _datos_eeg(raw)
-    b_suave, a_suave = butter(2, 4.0, fs=fs)
-    salida = []
-    for fmin, fmax in BANDAS_CORTICALES:
-        b, a = butter(4, [fmin, fmax], btype="band", fs=fs)
-        envolvente = np.abs(hilbert(filtfilt(b, a, x, axis=1), axis=1))
-        envolvente = np.log(np.maximum(filtfilt(b_suave, a_suave, envolvente, axis=1), 1e-3))
-        salida.append(resample_poly(envolvente, FS_DECOD, int(fs), axis=1))
-    return np.vstack(salida)
+def senal_cortical(raw):
+    """Suma de las envolventes de mu, beta y gamma baja de cada canal."""
+    x, fs, canales = _datos_eeg(raw)
+    suma = sum(_envolvente(x, fs, fmin, fmax) for fmin, fmax in BANDAS_CORTICALES.values())
+    return suma, fs, canales
 
-# La entrada del modelo
-# Junta el EEG desde -0,5s hasta 0,5s
-def _matriz_retardos(caract, ventana_s=VENTANA_S):
-    """Cada instante ve el EEG desde -0.5 s hasta +0.5 s (decodificacion offline)."""
-    n_ret = int(ventana_s * FS_DECOD)
-    relleno = np.pad(caract, ((0, 0), (n_ret, n_ret)), mode="edge")
-    n = caract.shape[1]
-    columnas = [relleno[:, n_ret + k:n_ret + k + n] for k in range(-n_ret, n_ret + 1)]
-    matriz = np.vstack(columnas).T
-    return (matriz - matriz.mean(0)) / (matriz.std(0) + 1e-12)
+
+# Fase instantanea del ritmo de la marcha: filtro angosto alrededor de la
+# frecuencia de zancada (la senal queda casi senoidal) y transformada de Hilbert
+def fase_instantanea(senal, fs, f_zancada):
+    """Fase (-pi a pi) de la senal filtrada en f_zancada +-20 %."""
+    b, a = butter(2, [f_zancada * (1 - ANCHO_BANDA), f_zancada * (1 + ANCHO_BANDA)],
+                  btype="band", fs=fs)
+    return np.angle(hilbert(filtfilt(b, a, senal, axis=-1), axis=-1))
 
 
 # ==========================================================
@@ -1095,6 +1103,7 @@ def _matriz_retardos(caract, ventana_s=VENTANA_S):
 # Sube de 0 a 2pi si hay dos eventos iguales consecutivos
 # Básicamente coloca "cada parte del ciclo entre eventos en una fase"
 # Por ejemplo, al inicio del ciclo (primer contacto = primer evento), va a estar a 0° y al final a 360° (segundo contacto)
+# Aca se usa solo como referencia: para graficar y para comparar con la fase del EEG
 def _fase_objetivo(t_eventos, t):
     """Fase 0-2pi entre eventos consecutivos del mismo tipo (NaN fuera de rango)."""
     fase = np.full(len(t), np.nan)
@@ -1103,14 +1112,14 @@ def _fase_objetivo(t_eventos, t):
         fase[sel] = 2 * np.pi * (t[sel] - a) / (b - a)
     return fase
 
-# Cuando la fase predicha cae de 2pi a cero, es que ocurrió un evento
+
+# Cuando la fase cae de 2pi a cero, es que ocurrió un evento
 # Ubica el evento interpolando muestras
-# Hace lo opuesto, recibe la fase predicha según los eventos, y "razona" que cuando pasa de 360° a 0° es porque se completó un ciclo y pasó a otro
+# Recibe la fase del EEG ya referida al evento (0° = evento) y "razona" que cuando pasa de 360° a 0° es porque se completó un ciclo y pasó a otro
 # Marca estos eventos!
-# Va a servir una vez que el modelo prediga una fase solo viendo el EEG
-# Cuando nuestro modelo vea el EEG y devuelva en qué fase está, esta función lo vuelve al dominio del tiempo
+# Es la que vuelve la fase del EEG al dominio del tiempo
 def _eventos_desde_fase(t, fase, separacion_min):
-    """Instantes donde la fase predicha vuelve de 2pi a 0 (interpolado entre muestras)."""
+    """Instantes donde la fase vuelve de 2pi a 0 (interpolado entre muestras)."""
     saltos = np.flatnonzero(np.diff(fase) < -np.pi)
     eventos = []
     for i in saltos:
@@ -1127,81 +1136,104 @@ def _eventos_desde_fase(t, fase, separacion_min):
     return np.array(limpios)
 
 
+# Calibracion: en que fase esta el EEG cuando ocurre un evento.
+# Promedio circular (los angulos se promedian como vectores, asi 359° y 1° dan 0°)
+# PLV (phase locking value, 0 a 1): que tan siempre igual es esa fase.
+# 1 = el evento cae siempre en la misma fase del EEG; 0 = cae en cualquier fase
+def calibrar_fase(fase, t, t_eventos):
+    """Angulo medio y PLV de la fase del EEG en los instantes t_eventos."""
+    if len(t_eventos) == 0:
+        return 0.0, 0.0
+    vectores = np.exp(1j * np.interp(t_eventos, t, np.unwrap(fase)))
+    media = vectores.mean()
+    return float(np.angle(media)), float(np.abs(media))
+
+
 # ==========================================================
 # DECODIFICACION
 # ==========================================================
 
-# Se corta el registro de EEG en 5 tramos
-# Antes, con la función fase_objetivo, se razona a qué fase (en grados) corresponde cada parte del ciclo
-#       Principio del ciclo (primer contacto) --> 0°
-#       Fin del ciclo (segundo contacto) --> 360°
-#       Con información previa de las plataformas de fuerza!
-#       Tiene cada paso separado
-# Al modelo se lo entrena con 4 de esos 5 tramos
-# Se hace para 4 eventos: contacto y despegue de cada pie
-# El modelo va a ver "tramos circundantes" a cada instante, para entender en cada momento qué debería haber alrededor (para predecir)
-# Con los "numerosos 4 tramos del mismo EEG" se entrena al modelo para entender la relación EEG <--> fase
-#       Cada momento del EEG ya tiene su fase (calculada con las plataformas)
-#       El modelo ve tanto el EEG como las fases (en grados) de la marcha (el recorrido de 0° a 360° en un ciclo completo)
-#       De esta manera, puede relacionar movimientos del EEG con cambios de fase (ejemplo --> temblores que indican fase cerca de 0°/360°)
-#       Ajustando pesos y coeficientes puede llegar a que esos temblores de EEG se corresponden a un evento en particular (pisada)
-#       (Aprendizaje = regresión lineal)
-#       Sin embargo hay una penalización (ridge) para evitar que se ajuste de más a esos tramos de entrenamiento
-# Una vez que el modelo ya aprendió una "regla" para relacionar EEG con fases, le damos el quinto segmento que no vió
-# A partir de eso, predice el seno y el coseno de la fase que corresponde a cada momento del EEG
-#       En todo momento la fase se expresa como suma de senos y cosenos y no en grados
-#       Es utilizando la función arctan2 que se pasa de esta suma a los grados
-# Esto se hace cinco veces (cambiando qué tramo quedó afuera de los cinco) hasta tener una predicción completa del registro
-# Con arctan2 se pasa del seno y coseno predichos a la fase en grados
-# Para pasar de fase a eventos se usa _eventos_desde_fase: detecta donde la fase vuelve de 360° a 0°
-# (gracias al seno y coseno, 0° = 360°) y ahi marca el evento
-def decodificar_eventos(raw, eventos_fp, version="baja", fs_eventos=FS_EVENTOS):
+# Obtiene, a partir del EEG, en que momento ocurren los contactos y despegues de cada pie
+#   1. Arma la senal (baja o cortical) de los 9 canales y su fase instantanea
+#   2. Elige el canal donde los eventos caen siempre en la misma fase (mayor PLV en la calibracion)
+#   3. Para cada evento mide en la calibracion su angulo (de las plataformas, unico dato que se usa)
+#   4. Resta ese angulo a la fase del EEG: asi cada evento queda en 0°
+#   5. Con _eventos_desde_fase marca un evento cada vez que la fase vuelve de 360° a 0°
+# No hay entrenamiento: solo filtrado, Hilbert y un angulo de calibracion por evento
+def decodificar_eventos(raw, eventos_fp, f_zancada, version="baja",
+                        fs_eventos=FS_EVENTOS, t_calibracion=T_CALIBRACION):
     """
     Decodifica contactos y despegues de ambos pies a partir del EEG.
     Devuelve un diccionario con el mismo formato que detectar_eventos()
     (indices a 1000 Hz), para poder usarlo directamente en generar_mot().
     """
-    caract = caracteristicas_baja(raw) if version == "baja" else caracteristicas_cortical(raw)
-    matriz = _matriz_retardos(caract)
-    n = matriz.shape[0]
-    t = np.arange(n) / FS_DECOD
+    senal, fs, canales = senal_baja(raw) if version == "baja" else senal_cortical(raw)
+    fases = fase_instantanea(senal, fs, f_zancada)
+    t = np.arange(senal.shape[1]) / fs
 
-    claves, columnas = [], []
+    def calibracion(tipo, pie):
+        t_ev = eventos_fp[tipo][pie] / fs_eventos
+        return t_ev[(t_ev > 1.0) & (t_ev < t_calibracion)]
+
+    # Canal con la fase mas consistente en los eventos (promedio de los 4 eventos)
+    plv_canal = []
+    for i in range(len(canales)):
+        plv = [calibrar_fase(fases[i], t, calibracion(tipo, pie))[1]
+               for tipo in TIPOS for pie in PIES]
+        plv_canal.append(np.mean(plv))
+    mejor = int(np.argmax(plv_canal))
+    fase_eeg = fases[mejor]
+
+    eventos = {"tiempo": t, "contactos": {}, "despegues": {}, "fases": {},
+               "canal": canales[mejor], "plv_canales": dict(zip(canales, plv_canal)),
+               "angulos": {}, "f_zancada": f_zancada}
     for tipo in TIPOS:
         for pie in PIES:
-            fase = _fase_objetivo(eventos_fp[tipo][pie] / fs_eventos, t)
-            claves.append((tipo, pie))
-            columnas += [np.sin(fase), np.cos(fase)]
-    objetivo = np.column_stack(columnas)
-    validas = np.isfinite(objetivo).all(axis=1)
-
-    prediccion = np.full(objetivo.shape, np.nan)
-    for bloque in np.array_split(np.arange(n), N_BLOQUES):
-        entrenamiento = np.setdiff1d(np.flatnonzero(validas), bloque)
-        modelo = Ridge(alpha=ALFA_RIDGE).fit(matriz[entrenamiento], objetivo[entrenamiento])
-        prediccion[bloque] = modelo.predict(matriz[bloque])
-
-    ciclo_medio = np.median(np.diff(eventos_fp["contactos"]["Derecha"])) / fs_eventos
-    eventos = {"tiempo": t, "contactos": {}, "despegues": {}, "fases": {}}
-    for j, (tipo, pie) in enumerate(claves):
-        fase_pred = np.mod(np.arctan2(prediccion[:, 2 * j], prediccion[:, 2 * j + 1]), 2 * np.pi)
-        t_ev = _eventos_desde_fase(t, fase_pred, separacion_min=0.6 * ciclo_medio)
-        eventos[tipo][pie] = np.round(t_ev * fs_eventos).astype(int)
-        eventos["fases"][(tipo, pie)] = (fase_pred, _fase_objetivo(eventos_fp[tipo][pie] / fs_eventos, t))
+            angulo, plv = calibrar_fase(fase_eeg, t, calibracion(tipo, pie))
+            # fase del EEG referida al evento: 0° justo en el evento
+            fase_ref = np.mod(fase_eeg - angulo, 2 * np.pi)
+            t_ev = _eventos_desde_fase(t, fase_ref, separacion_min=0.6 / f_zancada)
+            eventos[tipo][pie] = np.round(t_ev * fs_eventos).astype(int)
+            eventos["angulos"][(tipo, pie)] = (np.degrees(angulo) % 360, plv)
+            eventos["fases"][(tipo, pie)] = (
+                fase_ref, _fase_objetivo(eventos_fp[tipo][pie] / fs_eventos, t))
     return eventos
+
+
+# PLV de cada banda cortical por separado, en el canal elegido (control:
+# indica si la informacion viene de mu/beta o sobre todo de gamma, mas expuesta al musculo)
+def plv_por_banda(raw, canal, eventos_fp, f_zancada, fs_eventos=FS_EVENTOS,
+                  t_calibracion=T_CALIBRACION):
+    x, fs, canales = _datos_eeg(raw, [canal])
+    t = np.arange(x.shape[1]) / fs
+    resultado = {}
+    for banda, (fmin, fmax) in BANDAS_CORTICALES.items():
+        fase = fase_instantanea(_envolvente(x[0], fs, fmin, fmax), fs, f_zancada)
+        plv = []
+        for tipo in TIPOS:
+            for pie in PIES:
+                t_ev = eventos_fp[tipo][pie] / fs_eventos
+                plv.append(calibrar_fase(fase, t, t_ev[(t_ev > 1.0) & (t_ev < t_calibracion)])[1])
+        resultado[banda] = float(np.mean(plv))
+    return resultado
+
 
 # Compara los eventos con los obtenidos previamente con las plataformas de fuerza
 # Calcula estadísticos
-def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_eventos=FS_EVENTOS, tolerancia=0.3):
-    """Compara los eventos decodificados con los de las plataformas."""
+# Solo despues de la calibracion: esos eventos no se usaron para nada
+def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_eventos=FS_EVENTOS,
+                    tolerancia=0.3, t_calibracion=T_CALIBRACION):
+    """Compara los eventos decodificados con los de las plataformas (despues de la calibracion)."""
     filas = []
-    t_fin = eventos_eeg["tiempo"][-1]
+    t = eventos_eeg["tiempo"]
+    evaluar = t >= t_calibracion
     for tipo, nombre in TIPOS.items():
         for pie in PIES:
             real = eventos_fp[tipo][pie] / fs_eventos
-            real = real[(real > VENTANA_S) & (real < t_fin - VENTANA_S)]
+            real = real[(real > t_calibracion + 0.5) & (real < t[-1] - 0.5)]
             pred = eventos_eeg[tipo][pie] / fs_eventos
-            if len(pred) == 0:
+            pred = pred[pred >= t_calibracion]
+            if len(pred) == 0 or len(real) == 0:
                 continue
             err = pred[:, None] - real[None, :]
             idx = np.abs(err).argmin(axis=1)
@@ -1209,10 +1241,13 @@ def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_eventos=FS_EVENTOS
             ok = np.abs(err) < tolerancia
             emparejados = len(np.unique(idx[ok]))
             fase_pred, fase_real = eventos_eeg["fases"][(tipo, pie)]
-            validas = np.isfinite(fase_real)
+            validas = np.isfinite(fase_real) & evaluar
             r = np.corrcoef(np.cos(fase_pred[validas]), np.cos(fase_real[validas]))[0, 1]
             filas.append({
                 "velocidad": vel, "version": version, "evento": nombre, "pie": pie,
+                "canal": eventos_eeg["canal"],
+                "angulo_calibracion_deg": eventos_eeg["angulos"][(tipo, pie)][0],
+                "plv": eventos_eeg["angulos"][(tipo, pie)][1],
                 "reales": len(real), "detectados": len(pred),
                 "emparejados": emparejados,
                 "sensibilidad_pct": 100 * emparejados / max(len(real), 1),
@@ -1228,8 +1263,8 @@ def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_eventos=FS_EVENTOS
 # FIGURAS
 # ==========================================================
 
-# Grafica la fase real vs. la predicha (decodificada) por el modelo
-def graficar_fase(eventos_eeg, vel, version, inicio=10.0, duracion=6.0):
+# Grafica la fase real vs. la decodificada del EEG (despues de la calibracion)
+def graficar_fase(eventos_eeg, vel, version, inicio=T_CALIBRACION + 5.0, duracion=6.0):
     t = eventos_eeg["tiempo"]
     sel = (t >= inicio) & (t <= inicio + duracion)
     fig, ejes = plt.subplots(2, 1, sharex=True, figsize=(8.27, 5.5))
@@ -1238,7 +1273,7 @@ def graficar_fase(eventos_eeg, vel, version, inicio=10.0, duracion=6.0):
         ax.plot(t[sel], np.degrees(fase_real[sel]), color="black", lw=1.2,
                 label="Plataformas (referencia)")
         ax.plot(t[sel], np.degrees(fase_pred[sel]), color="tab:purple", lw=1.2,
-                label="Decodificada del EEG")
+                label=f"Fase del EEG ({eventos_eeg['canal']})")
         ax.set_ylabel(f"Fase pie\n{pie.lower()} (°)", rotation=0, ha="right", va="center")
         ax.set_ylim(-10, 370)
         ax.grid(alpha=0.3)
@@ -1247,6 +1282,29 @@ def graficar_fase(eventos_eeg, vel, version, inicio=10.0, duracion=6.0):
     fig.suptitle(f"Fase del ciclo decodificada - {VERSIONES[version]} - {vel} m/s")
     fig.tight_layout()
     return fig
+
+
+# Grafica la consistencia de fase (PLV) de cada canal en la calibracion:
+# muestra en que canales el EEG sigue el ritmo de la marcha
+def graficar_plv(eventos_por_version, vel):
+    fig, ax = plt.subplots(figsize=(8.27, 3.8))
+    colores = {"baja": "tab:purple", "cortical": "tab:green"}
+    ancho = 0.8 / len(eventos_por_version)
+    for k, (version, eventos) in enumerate(eventos_por_version.items()):
+        canales = list(eventos["plv_canales"])
+        x = np.arange(len(canales)) + k * ancho
+        ax.bar(x, list(eventos["plv_canales"].values()), width=ancho,
+               color=colores.get(version), label=f"{VERSIONES[version]} - elegido: {eventos['canal']}")
+    ax.set_xticks(np.arange(len(canales)) + ancho * (len(eventos_por_version) - 1) / 2)
+    ax.set_xticklabels(canales)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("PLV (0 a 1)")
+    ax.set_title(f"Consistencia de fase del EEG en los eventos (calibracion) - {vel} m/s")
+    ax.grid(alpha=0.3, axis="y")
+    ax.legend(fontsize=7, loc="lower right")
+    fig.tight_layout()
+    return fig
+
 
 # Grafica el error de la decodificación
 def graficar_errores_decodificacion(filas):
@@ -1268,7 +1326,7 @@ def graficar_errores_decodificacion(filas):
         ax.set_xlabel("Velocidad (m/s)")
         ax.grid(alpha=0.3)
     ax1.legend(fontsize=7, loc="lower left")
-    fig.suptitle("Contactos decodificados del EEG vs plataformas")
+    fig.suptitle("Contactos decodificados del EEG vs plataformas (despues de la calibracion)")
     fig.tight_layout()
     return fig
 
@@ -1278,14 +1336,14 @@ def graficar_errores_decodificacion(filas):
 # ==========================================================
 
 # Pico de la PSD interpretado como paso
+# Devuelve tambien la frecuencia de zancada de cada velocidad, que usa el filtro angosto
 def analizar_frecuencia_eeg(dict_eeg, canales=("C3", "Cz", "C4"), fmin=0.4, fmax=3.0):
     """
     Pico de la PSD (Welch) del EEG entre 0.4 y 3 Hz en los canales centrales.
-    Aparece la frecuencia de zancada (un pico por ciclo) o la de paso (el doble):
-    es el ritmo de la marcha que aprovecha el decodificador.
+    Aparece la frecuencia de zancada (un pico por ciclo) o la de paso (el doble).
+    Devuelve (espectros, {vel: frecuencia de zancada}).
     """
-    from scipy.signal import welch
-    resultados = {}
+    resultados, zancadas = {}, {}
     print(f"  {'Velocidad':<12}{'Canal':<8}{'Pico (Hz)':>11}   Interpretacion")
     for vel, raw in dict_eeg.items():
         fs = raw.info["sfreq"]
@@ -1301,6 +1359,9 @@ def analizar_frecuencia_eeg(dict_eeg, canales=("C3", "Cz", "C4"), fmin=0.4, fmax
             resultados[vel][canal] = (f[banda][np.argmax(pxx[banda])], f, pxx)
         # El pico mas bajo entre canales se toma como zancada; uno del doble es el paso
         zancada = min(v[0] for v in resultados[vel].values())
+        if zancada > 1.3:          # solo aparecio el pico de paso: la zancada es la mitad
+            zancada /= 2
+        zancadas[vel] = zancada
         for canal, (pico, _, _) in resultados[vel].items():
             if abs(pico - zancada) < 0.05:
                 texto = f"zancada ({120 * pico:.0f} pasos/min)"
@@ -1309,7 +1370,7 @@ def analizar_frecuencia_eeg(dict_eeg, canales=("C3", "Cz", "C4"), fmin=0.4, fmax
             else:
                 texto = "-"
             print(f"  {vel + ' m/s':<12}{canal:<8}{pico:>11.3f}   {texto}")
-    return resultados
+    return resultados, zancadas
 
 
 # Gráfico del espectro de la EEG
@@ -1329,32 +1390,44 @@ def graficar_frecuencia_eeg(resultados):
         figuras.append(fig)
     return figuras
 
+
 # Decodificación de la marcha según EEG por versión
-# Usa el modelo definido en decodificar_eventos, evalúa el resultado y lo grafica
-def decodificar_marcha_eeg(dict_eeg, dict_eventos, versiones=("baja", "cortical")):
+# Usa decodificar_eventos (fase de Hilbert + calibracion), evalúa el resultado y lo grafica
+def decodificar_marcha_eeg(dict_eeg, dict_eventos, zancadas, versiones=("baja", "cortical")):
     """
-    Decodifica los eventos de cada velocidad con cada version de caracteristicas.
+    Decodifica los eventos de cada velocidad con cada version de la senal.
     Devuelve ({version: {vel: eventos}}, tabla de metricas, figuras).
     """
     import pandas as pd
     resultados = {v: {} for v in versiones}
     filas, figuras = [], []
     for vel in dict_eventos:
-        if vel not in dict_eeg:
+        if vel not in dict_eeg or vel not in zancadas:
             continue
         for version in versiones:
-            eventos = decodificar_eventos(dict_eeg[vel], dict_eventos[vel], version)
+            eventos = decodificar_eventos(dict_eeg[vel], dict_eventos[vel], zancadas[vel], version)
             resultados[version][vel] = eventos
             filas += evaluar_eventos(eventos, dict_eventos[vel], vel, version)
             figuras.append(graficar_fase(eventos, vel, version))
+        figuras.append(graficar_plv({v: resultados[v][vel] for v in versiones}, vel))
 
     tabla = pd.DataFrame(filas)
-    print(f"\n  {'Vel.':<6}{'Version':<10}{'Evento':<10}{'Pie':<11}{'Detect.':>9}"
-          f"{'Sens. (%)':>11}{'Falsos':>8}{'|Err| med (ms)':>16}{'r fase':>8}")
+    print(f"  Calibracion con los primeros {T_CALIBRACION:.0f} s; metricas sobre el resto del registro")
+    print(f"\n  {'Vel.':<6}{'Version':<10}{'Canal':<7}{'Evento':<10}{'Pie':<11}{'PLV':>5}"
+          f"{'Detect.':>10}{'Sens. (%)':>11}{'Falsos':>8}{'|Err| med (ms)':>16}{'r fase':>8}")
     for _, f in tabla.iterrows():
-        print(f"  {f['velocidad']:<6}{f['version']:<10}{f['evento']:<10}{f['pie']:<11}"
-              f"{f['detectados']:>4}/{f['reales']:<4}{f['sensibilidad_pct']:>11.0f}"
+        print(f"  {f['velocidad']:<6}{f['version']:<10}{f['canal']:<7}{f['evento']:<10}{f['pie']:<11}"
+              f"{f['plv']:>5.2f}{f['detectados']:>5}/{f['reales']:<4}{f['sensibilidad_pct']:>11.0f}"
               f"{f['falsos']:>8}{f['error_abs_mediano_ms']:>16.0f}{f['r_fase']:>8.2f}")
+
+    # Control de la version cortical: que banda aporta el ritmo de la marcha
+    if "cortical" in versiones:
+        print(f"\n  PLV de cada banda por separado (version cortical, canal elegido)")
+        print(f"  {'Vel.':<6}{'Canal':<7}" + "".join(f"{b:>12}" for b in BANDAS_CORTICALES))
+        for vel, eventos in resultados["cortical"].items():
+            plv = plv_por_banda(dict_eeg[vel], eventos["canal"], dict_eventos[vel], zancadas[vel])
+            print(f"  {vel:<6}{eventos['canal']:<7}" + "".join(f"{plv[b]:>12.2f}" for b in BANDAS_CORTICALES))
+
     figuras.append(graficar_errores_decodificacion(filas))
     return resultados, tabla, figuras
 
@@ -1382,11 +1455,11 @@ def integrar_opensim(sujeto_id, dict_eeg, dict_eventos,
     carpeta_sujeto = os.path.join(CARPETA_OPENSIM, f"S{sujeto_id}")
 
     print("\nFrecuencia de marcha a partir del espectro del EEG")
-    frec = analizar_frecuencia_eeg(dict_eeg)
+    frec, zancadas = analizar_frecuencia_eeg(dict_eeg)
     figuras += graficar_frecuencia_eeg(frec)
 
     print("\nDecodificacion de contactos y despegues a partir del EEG")
-    eventos_eeg, _, figs = decodificar_marcha_eeg(dict_eeg, dict_eventos, versiones)
+    eventos_eeg, _, figs = decodificar_marcha_eeg(dict_eeg, dict_eventos, zancadas, versiones)
     figuras += figs
 
     print("\nModelo personalizado (gait2392 escalado con subject-info.csv)")
