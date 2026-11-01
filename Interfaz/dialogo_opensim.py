@@ -37,7 +37,12 @@ def rutas_simulacion(sujeto_id, resultados_opensim):
         f"S{sujeto_id}",
         f"gait2392_S{sujeto_id}_escalado.osim"
     )
-    movimientos = {vel: datos["mot"] for vel, datos in resultados_opensim.items()}
+    # Un .mot por velocidad y por version del decodificador de EEG
+    movimientos = {}
+    for vel, datos in resultados_opensim.items():
+        for version, datos_version in datos.get("versiones", {"": datos}).items():
+            etiqueta = f"{vel} m/s" + (f" (EEG {version})" if version else "")
+            movimientos[etiqueta] = datos_version["mot"]
     return ruta_modelo, movimientos
 
 
@@ -65,7 +70,7 @@ class DialogoOpenSim(QDialog):
 
         disposicion.addWidget(self._crear_grupo("Modelo escalado del paciente", self.ruta_modelo))
         for vel, ruta_mot in self.movimientos.items():
-            disposicion.addWidget(self._crear_grupo(f"Movimiento a {vel} m/s", ruta_mot))
+            disposicion.addWidget(self._crear_grupo(f"Movimiento a {vel}", ruta_mot))
 
         botones = QHBoxLayout()
 
@@ -118,6 +123,6 @@ class DialogoOpenSim(QDialog):
 
     def _copiar_rutas(self):
         lineas = [f"Modelo: {self.ruta_modelo}"]
-        lineas += [f"Movimiento {vel} m/s: {ruta}" for vel, ruta in self.movimientos.items()]
+        lineas += [f"Movimiento {vel}: {ruta}" for vel, ruta in self.movimientos.items()]
         QGuiApplication.clipboard().setText("\n".join(lineas))
         QMessageBox.information(self, "Rutas copiadas", "Las rutas se copiaron al portapapeles.")

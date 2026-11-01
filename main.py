@@ -24,7 +24,7 @@ ETAPAS = [
     "Control de calidad",
     "Analisis tiempo-frecuencia mediante STFT",
     "GPM y estadistica",
-    "OpenSim e IMU",
+    "OpenSim (EEG) e IMU",
 ]
 
 # Seis etapas funcionales visibles; se respetan los nueve pasos internos.
@@ -91,7 +91,8 @@ def ejecutar_pipeline(
         Transformada STFT.
 
     Etapa 8:
-        Modelado biomecanico mediante OpenSim.
+        Simulacion en OpenSim a partir de eventos
+        decodificados del EEG y comparacion con IMU.
 
     La funcion es compatible con la interfaz
     grafica y con la ejecucion por terminal.
@@ -586,19 +587,37 @@ def ejecutar_pipeline(
         _avisar_etapa(al_iniciar_etapa, 8)
 
         Reporte.agregar_subtitulo(
-            "Etapa 8: OpenSim y comparacion con IMU"
+            "Etapa 8: Simulacion en OpenSim a partir del EEG"
         )
 
         resultados_opensim = None
 
         if incluir_opensim:
 
+            print(
+                "  - El .mot se genera solo con contactos y "
+                "despegues decodificados del EEG."
+            )
+            print(
+                "  - Las plataformas no generan movimiento: se usan "
+                "como etiquetas del decodificador (validacion cruzada "
+                "por 5 bloques de tiempo) y para el desfase con los IMU."
+            )
+            print(
+                "  - Version 'baja' (0.3-4 Hz): incluye el artefacto "
+                "de movimiento de cada paso."
+            )
+            print(
+                "  - Version 'cortical' (envolvente de mu, beta y "
+                "gamma baja): lo mas cercano a actividad cerebral."
+            )
+
             (
                 resultados_opensim,
                 figuras_opensim
             ) = Interpretacion.integrar_opensim(
                 sujeto_id,
-                dict_fz_corregido,
+                dict_eeg_ref,
                 dict_eventos
             )
 

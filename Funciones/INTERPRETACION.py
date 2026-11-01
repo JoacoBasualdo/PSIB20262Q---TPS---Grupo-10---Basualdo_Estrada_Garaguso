@@ -17,7 +17,9 @@ import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.signal import welch, correlate, argrelextrema
+from scipy.signal import (welch, correlate, argrelextrema, butter, filtfilt,
+                          hilbert, resample_poly)
+from sklearn.linear_model import Ridge
 
 from .Lectura import RAIZ_PROYECTO
 from .Features import FS_FP
@@ -755,7 +757,7 @@ def _metricas(a, b):
 # calcula desfasaje del imu respecto a la cinta
 # compara duraciones de zancada para ver correspondencia de ciclos entre sí
 # luego, usa la correlación cruzada de la rodilla para confirmar
-def _desfase_por_ciclos(contactos_fp, contactos_imu, solapamiento_min=15):
+def _desfase_por_ciclos(contactos_fp, contactos_imu, solapamiento_min=15, max_desfase=5.0):
     """
     Desfase grueso entre plataformas e IMU. Las senales de marcha son casi
     periodicas, asi que una correlacion cruzada directa puede confundir un
@@ -768,6 +770,9 @@ def _desfase_por_ciclos(contactos_fp, contactos_imu, solapamiento_min=15):
     for k in range(-len(d_fp) + solapamiento_min, len(d_imu) - solapamiento_min):
         i0, i1 = max(0, -k), min(len(d_fp), len(d_imu) - k)
         if i1 - i0 < solapamiento_min:
+            continue
+        # El registro se inicio a mano: un desfase de mas de unos segundos no es creible
+        if abs(np.median(contactos_imu[i0 + k:i1 + k] - contactos_fp[i0:i1])) > max_desfase:
             continue
         r = np.corrcoef(d_fp[i0:i1], d_imu[i0 + k:i1 + k])[0, 1]
         if r > mejor[0]:
@@ -800,12 +805,38 @@ def estimar_desfase(ciclos_fp, ciclos_imu, t_a, y_a, t_b, y_b, ventana=0.3, fs=F
     sel = np.abs(lags) <= ventana
     fino = lags[sel][np.argmax(xc[sel])]
     print(f"  Desfase por secuencia de zancadas: {grueso:.3f} s "
-          f"(r entre duraciones FP e IMU = {r_dur:.2f})")
+          f"(r entre duraciones de zancada e IMU = {r_dur:.2f})")
     return grueso + fino
+
+# Desfase IMU - plataformas para cada velocidad, solo a partir de los eventos
+# (no genera ningun .mot). Los eventos decodificados del EEG estan en la escala
+# de tiempo de las plataformas, asi que este desfase es el que se les aplica.
+def desfases_imu_plataformas(sujeto_id, dict_eventos,
+                             ruta_imu_base=os.path.join(RAIZ_PROYECTO, "Dataset", "IMU")):
+    desfases = {}
+    print(f"  {'Velocidad':<12}{'Desfase (s)':>12}{'r duraciones':>14}")
+    for vel, eventos in dict_eventos.items():
+        imu = cargar_imu(os.path.join(ruta_imu_base, f"IMU_S{sujeto_id}_{vel}"))
+        if imu is None:
+            continue
+        ciclos_fp = ciclos_desde_eventos(eventos)
+        ciclos_imu = eventos_imu(imu)
+        c_fp = np.array([c[0] for c in ciclos_fp["Derecha"]])
+        c_imu = np.array([c[0] for c in ciclos_imu["Derecha"]])
+        grueso, r = _desfase_por_ciclos(c_fp, c_imu)
+        # ajuste fino: mediana de la diferencia entre contactos emparejados
+        resto = (c_imu - grueso)[:, None] - c_fp[None, :]
+        resto = resto[np.arange(len(c_imu)), np.abs(resto).argmin(axis=1)]
+        resto = resto[np.abs(resto) < 0.3]
+        desfases[vel] = grueso + (np.median(resto) if len(resto) else 0.0)
+        print(f"  {vel + ' m/s':<12}{desfases[vel]:>12.3f}{r:>14.2f}")
+    return desfases
+
 
 # compara frecuencia, parámetros temporales, error de contacto/ángulos,
 # imprime tablas y guarda el csv
-def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida, vel):
+def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida, vel,
+                         fuente="FP", desfase=None):
     """Compara frecuencia, eventos y angulos articulares. Devuelve (tabla, figuras)."""
     q = res_opensim["q"]
     t_os = q.index.to_numpy()
@@ -816,9 +847,14 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
     # --- Desfase FP/OpenSim vs IMU con la rodilla derecha
     rod_os = ARTICULACIONES["Rodilla"]["signo"] * q["knee_angle_r"].to_numpy()
     rod_imu = imu["angulos"][("Rodilla", "Derecha")]
-    desfase = estimar_desfase(ciclos_fp, ciclos_imu, t_os, rod_os, t_imu, rod_imu)
-    print(f"  Desfase total IMU - plataformas: {desfase:.3f} s "
-          f"(se corrige antes de comparar en el tiempo)")
+    # Si los eventos vienen del EEG, sus tiempos estan en la escala de las
+    # plataformas (son sus etiquetas de entrenamiento): se reusa el desfase ya estimado.
+    if desfase is None:
+        desfase = estimar_desfase(ciclos_fp, ciclos_imu, t_os, rod_os, t_imu, rod_imu)
+        print(f"  Desfase total IMU - plataformas: {desfase:.3f} s "
+              f"(se corrige antes de comparar en el tiempo)")
+    else:
+        print(f"  Desfase IMU - plataformas (estimado con los contactos): {desfase:.3f} s")
 
     # --- Frecuencia de zancada
     print(f"\n  {'Senal':<28}{'f zancada (Hz)':>16}{'T (s)':>8}")
@@ -831,14 +867,14 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
         print(f"  {nombre:<28}{f0:>16.3f}{1 / f0:>8.3f}")
 
     # --- Parametros temporales
-    print(f"\n  {'Pie':<12}{'Fuente':<10}{'Ciclos':>8}{'Ciclo (s)':>16}{'Apoyo (%)':>16}")
+    print(f"\n  {'Pie':<12}{'Fuente':<14}{'Ciclos':>8}{'Ciclo (s)':>16}{'Apoyo (%)':>16}")
     for pie in LADOS:
-        for fuente, ciclos in (("FP", ciclos_fp[pie]), ("IMU", ciclos_imu[pie])):
+        for origen, ciclos in ((fuente, ciclos_fp[pie]), ("IMU", ciclos_imu[pie])):
             dur, apo = _parametros_temporales(ciclos)
-            print(f"  {pie:<12}{fuente:<10}{len(ciclos):>8}"
+            print(f"  {pie:<12}{origen:<14}{len(ciclos):>8}"
                   f"{dur.mean():>9.3f} ± {dur.std():.3f}{apo.mean():>9.1f} ± {apo.std():.1f}")
             filas.append({"velocidad": vel, "tipo": "temporal", "pie": pie,
-                          "fuente": fuente, "n_ciclos": len(ciclos),
+                          "fuente": origen, "n_ciclos": len(ciclos),
                           "ciclo_s": dur.mean(), "ciclo_sd": dur.std(),
                           "apoyo_pct": apo.mean(), "apoyo_sd": apo.std()})
 
@@ -886,14 +922,15 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
                           "rango_imu_deg": np.ptp(m_imu)})
 
     tabla = pd.DataFrame(filas)
+    tabla["desfase_s"] = desfase
     os.makedirs(carpeta_salida, exist_ok=True)
     ruta_csv = os.path.join(carpeta_salida, f"comparacion_opensim_imu_{vel}.csv")
     tabla.to_csv(ruta_csv, index=False, float_format="%.4f")
     print(f"\n  Tabla de metricas: {os.path.relpath(ruta_csv, RAIZ_PROYECTO)}")
 
-    figuras.append(_figura_ciclos(curvas, vel))
-    figuras.append(_figura_continua(q, imu, desfase, vel))
-    figuras.append(_figura_frecuencias(frecuencias, vel))
+    figuras.append(_figura_ciclos(curvas, vel, fuente))
+    figuras.append(_figura_continua(q, imu, desfase, vel, fuente=fuente))
+    figuras.append(_figura_frecuencias(frecuencias, vel, fuente))
     return tabla, figuras
 
 
@@ -924,7 +961,7 @@ def graficar_frecuencia_fp(resultados_frec):
     return figuras
 
 # los ángulos del mot con contactos/despegues
-def graficar_mot(df_mot, ciclos_fp, vel, duracion=5.0):
+def graficar_mot(df_mot, ciclos_fp, vel, duracion=5.0, fuente="FP"):
     """Coordenadas del .mot con los eventos de las plataformas superpuestos."""
     t0 = df_mot.index[0] + 5.0
     sel = (df_mot.index >= t0) & (df_mot.index <= t0 + duracion)
@@ -943,12 +980,12 @@ def graficar_mot(df_mot, ciclos_fp, vel, duracion=5.0):
         ax.grid(alpha=0.3)
     ejes[0].legend(fontsize=8, loc="upper right")
     ejes[-1].set_xlabel("Tiempo (s)   |   linea llena: contacto, punteada: despegue")
-    fig.suptitle(f"Cinematica generada para OpenSim (.mot) - {vel} m/s")
+    fig.suptitle(f"Cinematica generada para OpenSim (.mot, eventos {fuente}) - {vel} m/s")
     fig.tight_layout()
     return fig
 
 # ciclo promedio y desvío, comparando OpenSIM e IMU (por articulación/lado)
-def _figura_ciclos(curvas, vel):
+def _figura_ciclos(curvas, vel, fuente="FP"):
     x = np.linspace(0, 100, N_PUNTOS_FASE)
     fig, ejes = plt.subplots(3, 2, sharex=True, figsize=(8.27, 9))
     for i, art in enumerate(ARTICULACIONES):
@@ -958,7 +995,7 @@ def _figura_ciclos(curvas, vel):
                 ax.set_visible(False)
                 continue
             cur_os, cur_imu = curvas[(art, pie)]
-            for cur, color, nombre in ((cur_os, COLOR_OS, "OpenSim (eventos FP)"),
+            for cur, color, nombre in ((cur_os, COLOR_OS, f"OpenSim (eventos {fuente})"),
                                        (cur_imu, COLOR_IMU, "IMU (Xsens)")):
                 m, s = cur.mean(0), cur.std(0)
                 ax.plot(x, m, color=color, label=f"{nombre}, n={len(cur)}")
@@ -971,12 +1008,12 @@ def _figura_ciclos(curvas, vel):
     ejes[0, 0].legend(fontsize=7)
     for ax in ejes[-1]:
         ax.set_xlabel("Ciclo de marcha (%)")
-    fig.suptitle(f"Ciclo promedio ± DE: OpenSim vs IMU - {vel} m/s")
+    fig.suptitle(f"Ciclo promedio ± DE: OpenSim (eventos {fuente}) vs IMU - {vel} m/s")
     fig.tight_layout()
     return fig
 
 # señales openSIM vs IMU alineados
-def _figura_continua(q, imu, desfase, vel, duracion=6.0):
+def _figura_continua(q, imu, desfase, vel, duracion=6.0, fuente="FP"):
     t_os = q.index.to_numpy()
     t0 = t_os[0] + 10.0
     fig, ejes = plt.subplots(3, 1, sharex=True, figsize=(8.27, 7))
@@ -992,12 +1029,12 @@ def _figura_continua(q, imu, desfase, vel, duracion=6.0):
         ax.grid(alpha=0.3)
     ejes[0].legend(fontsize=8, loc="upper right")
     ejes[-1].set_xlabel(f"Tiempo de las plataformas (s) — IMU corrido {desfase:.3f} s")
-    fig.suptitle(f"Pierna derecha en el tiempo: OpenSim vs IMU - {vel} m/s")
+    fig.suptitle(f"Pierna derecha en el tiempo: OpenSim (eventos {fuente}) vs IMU - {vel} m/s")
     fig.tight_layout()
     return fig
 
 # espectro de la rodilla en OpenSIM vs IMU
-def _figura_frecuencias(frecuencias, vel):
+def _figura_frecuencias(frecuencias, vel, fuente="FP"):
     fig, ax = plt.subplots(figsize=(8.27, 4))
     for (nombre, (f0, f, pxx)), color in zip(frecuencias.items(), (COLOR_OS, COLOR_IMU)):
         sel = f <= 5
@@ -1005,7 +1042,7 @@ def _figura_frecuencias(frecuencias, vel):
                 label=f"{nombre} (pico {f0:.3f} Hz)")
     ax.set_xlabel("Frecuencia (Hz)")
     ax.set_ylabel("PSD normalizada")
-    ax.set_title(f"Espectro del angulo de rodilla: OpenSim vs IMU - {vel} m/s")
+    ax.set_title(f"Espectro del angulo de rodilla: OpenSim (eventos {fuente}) vs IMU - {vel} m/s")
     ax.grid(alpha=0.3)
     ax.legend(fontsize=8)
     fig.tight_layout()
@@ -1013,23 +1050,334 @@ def _figura_frecuencias(frecuencias, vel):
 
 
 # ==========================================================
-# 10. PIPELINE COMPLETO
+# 10. DECODIFICACION DE LA MARCHA A PARTIR DEL EEG
+# ==========================================================
+# El .mot se genera solo con eventos decodificados del EEG. Una regresion ridge
+# predice la fase del ciclo de cada evento (contacto y despegue de cada pie)
+# como seno y coseno, y los eventos salen donde la fase vuelve a cero.
+# Las plataformas se usan solo como etiquetas: con validacion cruzada por 5
+# bloques de tiempo, ningun tramo se decodifica con un modelo entrenado con el.
+# Version "baja" (0.3-4 Hz): incluye el artefacto de movimiento de cada paso.
+# Version "cortical" (envolvente de mu, beta y gamma baja): lo mas cercano a
+# actividad cerebral. Compararlas muestra cuanto es cerebro y cuanto movimiento.
+
+CANALES = ["F3", "Fz", "F4", "C3", "Cz", "C4", "P3", "Pz", "P4"]
+FS_DECOD = 20             # Hz: frecuencia de trabajo del decodificador
+VENTANA_S = 0.5           # s: contexto antes y despues de cada instante
+N_BLOQUES = 5
+ALFA_RIDGE = 10.0
+BANDAS_CORTICALES = [(8, 13), (13, 30), (24, 40)]
+
+VERSIONES = {
+    "baja": "EEG 0.3-4 Hz (movimiento + EEG)",
+    "cortical": "EEG 8-40 Hz (mu, beta, gamma baja)",
+}
+PIES = ["Derecha", "Izquierda"]
+TIPOS = {"contactos": "Contacto", "despegues": "Despegue"}
+
+
+# ==========================================================
+# CARACTERISTICAS DEL EEG
+# ==========================================================
+
+def _datos_eeg(raw, canales=CANALES):
+    canales = [c for c in canales if c in raw.ch_names]
+    return raw.get_data(picks=canales) * 1e6, raw.info["sfreq"], canales
+
+
+def caracteristicas_baja(raw):
+    """EEG filtrado 0.3-4 Hz y llevado a 20 Hz."""
+    x, fs, _ = _datos_eeg(raw)
+    b, a = butter(2, [0.3, 4.0], btype="band", fs=fs)
+    return resample_poly(filtfilt(b, a, x, axis=1), FS_DECOD, int(fs), axis=1)
+
+
+def caracteristicas_cortical(raw):
+    """Envolvente (log) de mu, beta y gamma baja, suavizada a 4 Hz y llevada a 20 Hz."""
+    x, fs, _ = _datos_eeg(raw)
+    b_suave, a_suave = butter(2, 4.0, fs=fs)
+    salida = []
+    for fmin, fmax in BANDAS_CORTICALES:
+        b, a = butter(4, [fmin, fmax], btype="band", fs=fs)
+        envolvente = np.abs(hilbert(filtfilt(b, a, x, axis=1), axis=1))
+        envolvente = np.log(np.maximum(filtfilt(b_suave, a_suave, envolvente, axis=1), 1e-3))
+        salida.append(resample_poly(envolvente, FS_DECOD, int(fs), axis=1))
+    return np.vstack(salida)
+
+
+def _matriz_retardos(caract, ventana_s=VENTANA_S):
+    """Cada instante ve el EEG desde -0.5 s hasta +0.5 s (decodificacion offline)."""
+    n_ret = int(ventana_s * FS_DECOD)
+    relleno = np.pad(caract, ((0, 0), (n_ret, n_ret)), mode="edge")
+    n = caract.shape[1]
+    columnas = [relleno[:, n_ret + k:n_ret + k + n] for k in range(-n_ret, n_ret + 1)]
+    matriz = np.vstack(columnas).T
+    return (matriz - matriz.mean(0)) / (matriz.std(0) + 1e-12)
+
+
+# ==========================================================
+# FASE DEL CICLO <-> EVENTOS
+# ==========================================================
+
+def _fase_objetivo(t_eventos, t):
+    """Fase 0-2pi entre eventos consecutivos del mismo tipo (NaN fuera de rango)."""
+    fase = np.full(len(t), np.nan)
+    for a, b in zip(t_eventos[:-1], t_eventos[1:]):
+        sel = (t >= a) & (t < b)
+        fase[sel] = 2 * np.pi * (t[sel] - a) / (b - a)
+    return fase
+
+
+def _eventos_desde_fase(t, fase, separacion_min):
+    """Instantes donde la fase predicha vuelve de 2pi a 0 (interpolado entre muestras)."""
+    saltos = np.flatnonzero(np.diff(fase) < -np.pi)
+    eventos = []
+    for i in saltos:
+        f0, f1 = fase[i], fase[i + 1] + 2 * np.pi
+        frac = (2 * np.pi - f0) / (f1 - f0) if f1 != f0 else 0.0
+        eventos.append(t[i] + frac * (t[i + 1] - t[i]))
+    eventos = np.array(eventos)
+    if len(eventos) == 0:
+        return eventos
+    limpios = [eventos[0]]
+    for e in eventos[1:]:
+        if e - limpios[-1] >= separacion_min:
+            limpios.append(e)
+    return np.array(limpios)
+
+
+# ==========================================================
+# DECODIFICACION
+# ==========================================================
+
+def decodificar_eventos(raw, eventos_fp, version="baja", fs_fp=FS_FP):
+    """
+    Decodifica contactos y despegues de ambos pies a partir del EEG.
+    Devuelve un diccionario con el mismo formato que detectar_eventos()
+    (indices a 1000 Hz), para poder usarlo directamente en generar_mot().
+    """
+    caract = caracteristicas_baja(raw) if version == "baja" else caracteristicas_cortical(raw)
+    matriz = _matriz_retardos(caract)
+    n = matriz.shape[0]
+    t = np.arange(n) / FS_DECOD
+
+    claves, columnas = [], []
+    for tipo in TIPOS:
+        for pie in PIES:
+            fase = _fase_objetivo(eventos_fp[tipo][pie] / fs_fp, t)
+            claves.append((tipo, pie))
+            columnas += [np.sin(fase), np.cos(fase)]
+    objetivo = np.column_stack(columnas)
+    validas = np.isfinite(objetivo).all(axis=1)
+
+    prediccion = np.full(objetivo.shape, np.nan)
+    for bloque in np.array_split(np.arange(n), N_BLOQUES):
+        entrenamiento = np.setdiff1d(np.flatnonzero(validas), bloque)
+        modelo = Ridge(alpha=ALFA_RIDGE).fit(matriz[entrenamiento], objetivo[entrenamiento])
+        prediccion[bloque] = modelo.predict(matriz[bloque])
+
+    ciclo_medio = np.median(np.diff(eventos_fp["contactos"]["Derecha"])) / fs_fp
+    eventos = {"tiempo": t, "contactos": {}, "despegues": {}, "fases": {}}
+    for j, (tipo, pie) in enumerate(claves):
+        fase_pred = np.mod(np.arctan2(prediccion[:, 2 * j], prediccion[:, 2 * j + 1]), 2 * np.pi)
+        t_ev = _eventos_desde_fase(t, fase_pred, separacion_min=0.6 * ciclo_medio)
+        eventos[tipo][pie] = np.round(t_ev * fs_fp).astype(int)
+        eventos["fases"][(tipo, pie)] = (fase_pred, _fase_objetivo(eventos_fp[tipo][pie] / fs_fp, t))
+    return eventos
+
+
+def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_fp=FS_FP, tolerancia=0.3):
+    """Compara los eventos decodificados con los de las plataformas."""
+    filas = []
+    t_fin = eventos_eeg["tiempo"][-1]
+    for tipo, nombre in TIPOS.items():
+        for pie in PIES:
+            real = eventos_fp[tipo][pie] / fs_fp
+            real = real[(real > VENTANA_S) & (real < t_fin - VENTANA_S)]
+            pred = eventos_eeg[tipo][pie] / fs_fp
+            if len(pred) == 0:
+                continue
+            err = pred[:, None] - real[None, :]
+            idx = np.abs(err).argmin(axis=1)
+            err = err[np.arange(len(pred)), idx]
+            ok = np.abs(err) < tolerancia
+            emparejados = len(np.unique(idx[ok]))
+            fase_pred, fase_real = eventos_eeg["fases"][(tipo, pie)]
+            validas = np.isfinite(fase_real)
+            r = np.corrcoef(np.cos(fase_pred[validas]), np.cos(fase_real[validas]))[0, 1]
+            filas.append({
+                "velocidad": vel, "version": version, "evento": nombre, "pie": pie,
+                "reales": len(real), "detectados": len(pred),
+                "emparejados": emparejados,
+                "sensibilidad_pct": 100 * emparejados / max(len(real), 1),
+                "falsos": int((~ok).sum()),
+                "error_medio_ms": 1000 * err[ok].mean() if ok.any() else np.nan,
+                "error_abs_mediano_ms": 1000 * np.median(np.abs(err[ok])) if ok.any() else np.nan,
+                "r_fase": r,
+            })
+    return filas
+
+
+# ==========================================================
+# FIGURAS
+# ==========================================================
+
+def graficar_fase(eventos_eeg, vel, version, inicio=10.0, duracion=6.0):
+    t = eventos_eeg["tiempo"]
+    sel = (t >= inicio) & (t <= inicio + duracion)
+    fig, ejes = plt.subplots(2, 1, sharex=True, figsize=(8.27, 5.5))
+    for ax, pie in zip(ejes, PIES):
+        fase_pred, fase_real = eventos_eeg["fases"][("contactos", pie)]
+        ax.plot(t[sel], np.degrees(fase_real[sel]), color="black", lw=1.2,
+                label="Plataformas (referencia)")
+        ax.plot(t[sel], np.degrees(fase_pred[sel]), color="tab:purple", lw=1.2,
+                label="Decodificada del EEG")
+        ax.set_ylabel(f"Fase pie\n{pie.lower()} (°)", rotation=0, ha="right", va="center")
+        ax.set_ylim(-10, 370)
+        ax.grid(alpha=0.3)
+    ejes[0].legend(fontsize=8, loc="upper right")
+    ejes[-1].set_xlabel("Tiempo (s)   |   0° = contacto del talón")
+    fig.suptitle(f"Fase del ciclo decodificada - {VERSIONES[version]} - {vel} m/s")
+    fig.tight_layout()
+    return fig
+
+
+def graficar_errores_decodificacion(filas):
+    """Error de los contactos decodificados por version y velocidad."""
+    import pandas as pd
+    tabla = pd.DataFrame(filas)
+    tabla = tabla[tabla["evento"] == "Contacto"]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.27, 3.8))
+    colores = {"baja": "tab:purple", "cortical": "tab:green"}
+    for version, grupo in tabla.groupby("version"):
+        g = grupo.groupby("velocidad")[["sensibilidad_pct", "error_abs_mediano_ms"]].mean()
+        ax1.plot(g.index, g["sensibilidad_pct"], "o-", color=colores[version],
+                 label=VERSIONES[version])
+        ax2.plot(g.index, g["error_abs_mediano_ms"], "o-", color=colores[version])
+    ax1.set_ylabel("Contactos detectados (%)")
+    ax1.set_ylim(0, 105)
+    ax2.set_ylabel("|Error| mediano (ms)")
+    for ax in (ax1, ax2):
+        ax.set_xlabel("Velocidad (m/s)")
+        ax.grid(alpha=0.3)
+    ax1.legend(fontsize=7, loc="lower left")
+    fig.suptitle("Contactos decodificados del EEG vs plataformas")
+    fig.tight_layout()
+    return fig
+
+
+# ==========================================================
+# ANALISIS DE FRECUENCIAS DEL EEG
+# ==========================================================
+
+def analizar_frecuencia_eeg(dict_eeg, canales=("C3", "Cz", "C4"), fmin=0.4, fmax=3.0):
+    """
+    Pico de la PSD (Welch) del EEG entre 0.4 y 3 Hz en los canales centrales.
+    Aparece la frecuencia de zancada (un pico por ciclo) o la de paso (el doble):
+    es el ritmo de la marcha que aprovecha el decodificador.
+    """
+    from scipy.signal import welch
+    resultados = {}
+    print(f"  {'Velocidad':<12}{'Canal':<8}{'Pico (Hz)':>11}   Interpretacion")
+    for vel, raw in dict_eeg.items():
+        fs = raw.info["sfreq"]
+        resultados[vel] = {}
+        for canal in canales:
+            if canal not in raw.ch_names:
+                continue
+            x = raw.get_data(picks=[canal])[0] * 1e6
+            nper = int(20 * fs)
+            f, pxx = welch(x - x.mean(), fs=fs, nperseg=nper,
+                           noverlap=nper // 2, nfft=int(200 * fs))
+            banda = (f >= fmin) & (f <= fmax)
+            resultados[vel][canal] = (f[banda][np.argmax(pxx[banda])], f, pxx)
+        # El pico mas bajo entre canales se toma como zancada; uno del doble es el paso
+        zancada = min(v[0] for v in resultados[vel].values())
+        for canal, (pico, _, _) in resultados[vel].items():
+            if abs(pico - zancada) < 0.05:
+                texto = f"zancada ({120 * pico:.0f} pasos/min)"
+            elif abs(pico - 2 * zancada) < 0.1:
+                texto = f"paso ({60 * pico:.0f} pasos/min)"
+            else:
+                texto = "-"
+            print(f"  {vel + ' m/s':<12}{canal:<8}{pico:>11.3f}   {texto}")
+    return resultados
+
+
+def graficar_frecuencia_eeg(resultados):
+    figuras = []
+    for vel, por_canal in resultados.items():
+        fig, ax = plt.subplots(figsize=(8.27, 4))
+        for canal, (pico, f, pxx) in por_canal.items():
+            sel = f <= 6
+            ax.plot(f[sel], pxx[sel] / pxx[sel].max(), label=f"{canal} (pico {pico:.3f} Hz)")
+        ax.set_xlabel("Frecuencia (Hz)")
+        ax.set_ylabel("PSD normalizada")
+        ax.set_title(f"Espectro del EEG (canales centrales) - {vel} m/s")
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=8)
+        fig.tight_layout()
+        figuras.append(fig)
+    return figuras
+
+
+def decodificar_marcha_eeg(dict_eeg, dict_eventos, versiones=("baja", "cortical")):
+    """
+    Decodifica los eventos de cada velocidad con cada version de caracteristicas.
+    Devuelve ({version: {vel: eventos}}, tabla de metricas, figuras).
+    """
+    import pandas as pd
+    resultados = {v: {} for v in versiones}
+    filas, figuras = [], []
+    for vel in dict_eventos:
+        if vel not in dict_eeg:
+            continue
+        for version in versiones:
+            eventos = decodificar_eventos(dict_eeg[vel], dict_eventos[vel], version)
+            resultados[version][vel] = eventos
+            filas += evaluar_eventos(eventos, dict_eventos[vel], vel, version)
+            figuras.append(graficar_fase(eventos, vel, version))
+
+    tabla = pd.DataFrame(filas)
+    print(f"\n  {'Vel.':<6}{'Version':<10}{'Evento':<10}{'Pie':<11}{'Detect.':>9}"
+          f"{'Sens. (%)':>11}{'Falsos':>8}{'|Err| med (ms)':>16}{'r fase':>8}")
+    for _, f in tabla.iterrows():
+        print(f"  {f['velocidad']:<6}{f['version']:<10}{f['evento']:<10}{f['pie']:<11}"
+              f"{f['detectados']:>4}/{f['reales']:<4}{f['sensibilidad_pct']:>11.0f}"
+              f"{f['falsos']:>8}{f['error_abs_mediano_ms']:>16.0f}{f['r_fase']:>8.2f}")
+    figuras.append(graficar_errores_decodificacion(filas))
+    return resultados, tabla, figuras
+
+
+# ==========================================================
+# 11. PIPELINE COMPLETO
 # ==========================================================
 
 # Ejecuta todo en orden, llamada desde main
-def integrar_opensim(sujeto_id, dict_fz, dict_eventos,
-                     ruta_imu_base=os.path.join(RAIZ_PROYECTO, "Dataset", "IMU")):
+def integrar_opensim(sujeto_id, dict_eeg, dict_eventos,
+                     ruta_imu_base=os.path.join(RAIZ_PROYECTO, "Dataset", "IMU"),
+                     versiones=("baja", "cortical")):
     """
-    Corre todo el flujo para las velocidades con plataformas disponibles.
-    Devuelve (resultados, figuras).
+    Simulacion en OpenSim a partir del EEG. El .mot se genera solo con los
+    eventos decodificados del EEG; las plataformas (dict_eventos) se usan
+    como etiquetas del decodificador y para estimar el desfase con los IMU.
+
+    Resultados en OpenSim/S{id}/: el modelo escalado y, por cada version del
+    decodificador, OpenSim/S{id}/EEG_{version}/{vel}/ con el .mot y OpenSim.
+    Devuelve (resultados, figuras); resultados[vel]["mot"] es el .mot de la
+    primera version y resultados[vel]["versiones"] tiene todas.
     """
     figuras = []
     resultados = {}
     carpeta_sujeto = os.path.join(CARPETA_OPENSIM, f"S{sujeto_id}")
 
-    print("\nFrecuencia de marcha a partir del espectro de Fz")
-    frec = analizar_frecuencia_marcha(dict_fz)
-    figuras += graficar_frecuencia_fp(frec)
+    print("\nFrecuencia de marcha a partir del espectro del EEG")
+    frec = analizar_frecuencia_eeg(dict_eeg)
+    figuras += graficar_frecuencia_eeg(frec)
+
+    print("\nDecodificacion de contactos y despegues a partir del EEG")
+    eventos_eeg, _, figs = decodificar_marcha_eeg(dict_eeg, dict_eventos, versiones)
+    figuras += figs
 
     print("\nModelo personalizado (gait2392 escalado con subject-info.csv)")
     antro = cargar_antropometria(sujeto_id)
@@ -1041,40 +1389,48 @@ def integrar_opensim(sujeto_id, dict_fz, dict_eventos,
     print(f"  Traslaciones de la pelvis escaladas x{escala_vertical:.3f} "
           "respecto de la marcha de referencia")
 
-    for vel, eventos in dict_eventos.items():
-        print(f"\n--- {vel} m/s ---")
-        nombre = f"S{sujeto_id}_{vel}"
-        carpeta_vel = os.path.join(carpeta_sujeto, vel)
-        os.makedirs(carpeta_vel, exist_ok=True)
+    # Los eventos del EEG estan en la escala de tiempo de las plataformas
+    # (son sus etiquetas), asi que el desfase con los IMU se estima con ellas
+    print("\nDesfase entre IMU y plataformas (solo con los contactos)")
+    desfases = desfases_imu_plataformas(sujeto_id, dict_eventos, ruta_imu_base)
 
-        print("Generacion del .mot")
-        ruta_mot = os.path.join(carpeta_vel, f"{nombre}_marcha.mot")
-        df_mot = generar_mot(eventos, plantilla, ruta_mot,
-                             escala_vertical=escala_vertical, nombre=nombre)
-        ciclos_fp = ciclos_desde_eventos(eventos)
-        figuras.append(graficar_mot(df_mot, ciclos_fp, vel))
+    for version in versiones:
+        fuente = f"EEG {version}"
+        for vel, eventos in eventos_eeg[version].items():
+            print(f"\n--- {vel} m/s (eventos: {VERSIONES[version]}) ---")
+            nombre = f"S{sujeto_id}_{vel}_EEG_{version}"
+            carpeta_vel = os.path.join(carpeta_sujeto, f"EEG_{version}", vel)
+            os.makedirs(carpeta_vel, exist_ok=True)
 
-        print("OpenSim AnalyzeTool")
-        res_os = correr_opensim(ruta_modelo, ruta_mot, carpeta_vel, nombre)
-        ciclos_os = eventos_opensim(res_os)
-        print("  Ciclos que reconoce OpenSim (Zeni sobre el modelo): "
-              f"der. {len(ciclos_os['Derecha'])}, izq. {len(ciclos_os['Izquierda'])}")
-        resumen = resumen_opensim(res_os, ciclos_fp, velocidad=float(vel))
-        resultados[vel] = {"mot": ruta_mot, "opensim": res_os, "resumen": resumen}
+            print("Generacion del .mot")
+            ruta_mot = os.path.join(carpeta_vel, f"{nombre}_marcha.mot")
+            df_mot = generar_mot(eventos, plantilla, ruta_mot,
+                                 escala_vertical=escala_vertical, nombre=nombre)
+            ciclos_eeg = ciclos_desde_eventos(eventos)
+            figuras.append(graficar_mot(df_mot, ciclos_eeg, vel, fuente=fuente))
 
-        carpeta_imu = os.path.join(ruta_imu_base, f"IMU_S{sujeto_id}_{vel}")
-        imu = cargar_imu(carpeta_imu)
-        if imu is None:
-            print(f"  Sin IMU en {os.path.relpath(carpeta_imu, RAIZ_PROYECTO)}: "
-                  "se omite la comparacion")
-            continue
+            print("OpenSim AnalyzeTool")
+            res_os = correr_opensim(ruta_modelo, ruta_mot, carpeta_vel, nombre)
+            ciclos_os = eventos_opensim(res_os)
+            print("  Ciclos que reconoce OpenSim (Zeni sobre el modelo): "
+                  f"der. {len(ciclos_os['Derecha'])}, izq. {len(ciclos_os['Izquierda'])}")
+            resumen = resumen_opensim(res_os, ciclos_eeg, velocidad=float(vel))
+            datos = {"mot": ruta_mot, "opensim": res_os, "resumen": resumen}
 
-        print("Comparacion OpenSim vs IMU")
-        ciclos_imu = eventos_imu(imu)
-        tabla, figs = comparar_opensim_imu(res_os, ciclos_fp, imu, ciclos_imu,
-                                           carpeta_vel, vel)
-        figuras += figs
-        resultados[vel]["comparacion"] = tabla
+            imu = cargar_imu(os.path.join(ruta_imu_base, f"IMU_S{sujeto_id}_{vel}"))
+            if imu is None:
+                print("  Sin IMU para esta velocidad: se omite la comparacion")
+            else:
+                print("Comparacion OpenSim vs IMU")
+                ciclos_imu = eventos_imu(imu)
+                tabla, figs = comparar_opensim_imu(res_os, ciclos_eeg, imu, ciclos_imu,
+                                                   carpeta_vel, vel, fuente=fuente,
+                                                   desfase=desfases.get(vel))
+                figuras += figs
+                datos["comparacion"] = tabla
+
+            entrada = resultados.setdefault(vel, {"mot": ruta_mot, "versiones": {}})
+            entrada["versiones"][version] = datos
 
     print(f"\nModelo: {os.path.relpath(ruta_modelo, RAIZ_PROYECTO)}")
     print("Para verlo: OpenSim GUI > File > Open Model (.osim) y luego "
