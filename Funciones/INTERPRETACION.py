@@ -1,15 +1,16 @@
 """
 Integracion con OpenSim y comparacion con los IMU (Xsens MVN Awinda).
 
-Flujo:
-  1. Frecuencia de marcha: PSD (Welch) de Fz para obtener la frecuencia de zancada.
-  2. Antropometria: subject-info.csv -> factores de escala por segmento.
-  3. Modelo personalizado: gait2392 escalado con la API de OpenSim.
-  4. .mot: plantilla cinematica de referencia deformada en el tiempo con los
-     eventos (contacto / despegue) que detecta nuestro algoritmo sobre las
-     plataformas de fuerza.
-  5. OpenSim: AnalyzeTool (Kinematics + BodyKinematics) sobre el modelo escalado.
-  6. Comparacion con los IMU: frecuencia, eventos, angulos articulares (r, RMSE).
+Flujo (el .mot se genera solo con el EEG):
+  1. Frecuencia de marcha: PSD (Welch) del EEG en C3, Cz y C4.
+  2. Decodificacion: contactos y despegues de cada pie a partir del EEG
+     (regresion ridge; las plataformas solo como etiquetas de entrenamiento).
+  3. Antropometria: subject-info.csv -> factores de escala por segmento.
+  4. Modelo personalizado: gait2392 escalado con la API de OpenSim.
+  5. .mot: plantilla cinematica de referencia deformada en el tiempo con los
+     eventos decodificados del EEG.
+  6. OpenSim: AnalyzeTool (Kinematics + BodyKinematics) sobre el modelo escalado.
+  7. Comparacion con los IMU: frecuencia, eventos, angulos articulares (r, RMSE).
 """
 
 import os
@@ -23,6 +24,10 @@ from sklearn.linear_model import Ridge
 
 from .Lectura import RAIZ_PROYECTO
 from .Features import FS_FP
+
+# Todos los eventos (los de las plataformas y los decodificados del EEG) se
+# guardan como indices a 1000 Hz, el formato de detectar_eventos()
+FS_EVENTOS = FS_FP
 
 try:
     import opensim as osim
@@ -72,7 +77,8 @@ def _requiere_opensim():
 # ==========================================================
 # 1. ANALISIS DE FRECUENCIAS
 # ==========================================================
-# Se calcula la PSD de Welch de cada pie --> cada pie se apoya una vez por zancada, entonces el pico de espectro indica frecuencia de zancada
+# PSD de Welch de una señal y su pico: se usa para el EEG (seccion 10) y para el
+# angulo de rodilla de OpenSim y de los IMU (seccion 8)
 
 
 def frecuencia_dominante(senal, fs, fmin=0.4, fmax=3.0, nperseg_s=20.0):
@@ -85,25 +91,6 @@ def frecuencia_dominante(senal, fs, fmin=0.4, fmax=3.0, nperseg_s=20.0):
     banda = (f >= fmin) & (f <= fmax)
     f_pico = f[banda][np.argmax(pxx[banda])]
     return f_pico, f, pxx
-
-# Utiliza la PSD calculada en la función anterior para determinar frecuencia de zancada
-def analizar_frecuencia_marcha(dict_fz):
-    """
-    Frecuencia de zancada a partir de Fz de cada pie.
-    Cada pie apoya una vez por zancada, asi que el pico fundamental de su Fz es
-    la frecuencia de zancada; la cadencia es el doble (dos pasos por zancada).
-    """
-    resultados = {}
-    print(f"  {'Velocidad':<12}{'Pie':<12}{'f zancada (Hz)':>16}"
-          f"{'T ciclo (s)':>14}{'Cadencia (pasos/min)':>22}")
-    for vel, (_, fuerzas) in dict_fz.items():
-        resultados[vel] = {}
-        for pie, fz in fuerzas.items():
-            f_pico, f, pxx = frecuencia_dominante(fz, FS_FP)
-            resultados[vel][pie] = {"f_zancada": f_pico, "f": f, "pxx": pxx}
-            print(f"  {vel + ' m/s':<12}{pie:<12}{f_pico:>16.3f}"
-                  f"{1 / f_pico:>14.3f}{120 * f_pico:>22.1f}")
-    return resultados
 
 
 # ==========================================================
@@ -400,7 +387,7 @@ def _evaluar_plantilla(t, ciclos, apoyo, balanceo):
     return y
 
 # Convierte los elementos a ciclos por pie y segundos (estan a 1000Hz)
-def ciclos_desde_eventos(eventos, fs=FS_FP):
+def ciclos_desde_eventos(eventos, fs=FS_EVENTOS):
     """Convierte los indices de detectar_eventos() en ciclos (s) por pie."""
     return {pie: _ciclos(eventos["contactos"][pie] / fs, eventos["despegues"][pie] / fs)
             for pie in LADOS}
@@ -430,7 +417,7 @@ def generar_mot(eventos, plantilla, ruta_mot, escala_vertical=1.0,
                 fs_salida=FS_MOT, nombre="marcha"):
     """
     Construye la cinematica del modelo deformando la plantilla con los eventos
-    detectados en las plataformas: en cada ciclo de cada pie el tramo
+    decodificados del EEG: en cada ciclo de cada pie el tramo
     contacto -> despegue recibe la fase de apoyo de la plantilla y el tramo
     despegue -> contacto la de balanceo. La pelvis y el tronco siguen al pie
     derecho. Devuelve un DataFrame con lo que se escribio en el .mot.
@@ -757,43 +744,46 @@ def _metricas(a, b):
 # calcula desfasaje del imu respecto a la cinta
 # compara duraciones de zancada para ver correspondencia de ciclos entre sí
 # luego, usa la correlación cruzada de la rodilla para confirmar
-def _desfase_por_ciclos(contactos_fp, contactos_imu, solapamiento_min=15, max_desfase=5.0):
+# Descarta desfases de mas de 5 segundos
+def _desfase_por_ciclos(contactos_ref, contactos_imu, solapamiento_min=15, max_desfase=5.0):
     """
-    Desfase grueso entre plataformas e IMU. Las senales de marcha son casi
-    periodicas, asi que una correlacion cruzada directa puede confundir un
-    ciclo con el vecino. La secuencia de duraciones de zancada, en cambio, varia
-    de ciclo a ciclo y funciona como huella: se busca el corrimiento de indices
-    que mejor correlaciona ambas secuencias.
+    Desfase grueso entre unos contactos de referencia (las plataformas) y los
+    IMU. Las senales de marcha son casi periodicas, asi que una correlacion
+    cruzada directa puede confundir un ciclo con el vecino. La secuencia de
+    duraciones de zancada, en cambio, varia de ciclo a ciclo y funciona como
+    huella: se busca el corrimiento de indices que mejor correlaciona ambas
+    secuencias.
     """
-    d_fp, d_imu = np.diff(contactos_fp), np.diff(contactos_imu)
+    d_ref, d_imu = np.diff(contactos_ref), np.diff(contactos_imu)
     mejor = (-np.inf, 0)
-    for k in range(-len(d_fp) + solapamiento_min, len(d_imu) - solapamiento_min):
-        i0, i1 = max(0, -k), min(len(d_fp), len(d_imu) - k)
+    for k in range(-len(d_ref) + solapamiento_min, len(d_imu) - solapamiento_min):
+        i0, i1 = max(0, -k), min(len(d_ref), len(d_imu) - k)
         if i1 - i0 < solapamiento_min:
             continue
         # El registro se inicio a mano: un desfase de mas de unos segundos no es creible
-        if abs(np.median(contactos_imu[i0 + k:i1 + k] - contactos_fp[i0:i1])) > max_desfase:
+        if abs(np.median(contactos_imu[i0 + k:i1 + k] - contactos_ref[i0:i1])) > max_desfase:
             continue
-        r = np.corrcoef(d_fp[i0:i1], d_imu[i0 + k:i1 + k])[0, 1]
+        r = np.corrcoef(d_ref[i0:i1], d_imu[i0 + k:i1 + k])[0, 1]
         if r > mejor[0]:
             mejor = (r, k)
     r, k = mejor
-    i0, i1 = max(0, -k), min(len(contactos_fp), len(contactos_imu) - k)
-    desfase = np.median(contactos_imu[i0 + k:i1 + k] - contactos_fp[i0:i1])
+    i0, i1 = max(0, -k), min(len(contactos_ref), len(contactos_imu) - k)
+    desfase = np.median(contactos_imu[i0 + k:i1 + k] - contactos_ref[i0:i1])
     return desfase, r
 
 
-def estimar_desfase(ciclos_fp, ciclos_imu, t_a, y_a, t_b, y_b, ventana=0.3, fs=FS_MOT):
+def estimar_desfase(ciclos_ref, ciclos_imu, t_a, y_a, t_b, y_b, ventana=0.3, fs=FS_MOT):
     """
-    Desfase de los IMU respecto de las plataformas (t_imu = t_fp + desfase).
+    Desfase de los IMU respecto de unos eventos de referencia
+    (t_imu = t_ref + desfase). Solo se usa si no se paso un desfase ya calculado.
     La cinta no esta sincronizada por hardware con los IMU (el registro se
     inicia a mano), por eso hay que estimarlo:
       1. grueso: secuencia de duraciones de zancada (resuelve que ciclo es cual);
       2. fino: correlacion cruzada de la senal de rodilla en +-0.3 s.
     """
-    c_fp = np.array([c[0] for c in ciclos_fp["Derecha"]])
+    c_ref = np.array([c[0] for c in ciclos_ref["Derecha"]])
     c_imu = np.array([c[0] for c in ciclos_imu["Derecha"]])
-    grueso, r_dur = _desfase_por_ciclos(c_fp, c_imu)
+    grueso, r_dur = _desfase_por_ciclos(c_ref, c_imu)
 
     t = np.arange(max(t_a[0], t_b[0] - grueso), min(t_a[-1], t_b[-1] - grueso), 1 / fs)
     a = np.interp(t, t_a, y_a)
@@ -835,8 +825,8 @@ def desfases_imu_plataformas(sujeto_id, dict_eventos,
 
 # compara frecuencia, parámetros temporales, error de contacto/ángulos,
 # imprime tablas y guarda el csv
-def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida, vel,
-                         fuente="FP", desfase=None):
+def comparar_opensim_imu(res_opensim, ciclos_eeg, imu, ciclos_imu, carpeta_salida, vel,
+                         fuente="EEG", desfase=None):
     """Compara frecuencia, eventos y angulos articulares. Devuelve (tabla, figuras)."""
     q = res_opensim["q"]
     t_os = q.index.to_numpy()
@@ -844,14 +834,13 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
     figuras = []
     filas = []
 
-    # --- Desfase FP/OpenSim vs IMU con la rodilla derecha
+    # --- Desfase IMU: los eventos del EEG estan en la escala de tiempo de las
+    # plataformas, asi que se usa el desfase IMU - plataformas ya calculado
     rod_os = ARTICULACIONES["Rodilla"]["signo"] * q["knee_angle_r"].to_numpy()
     rod_imu = imu["angulos"][("Rodilla", "Derecha")]
-    # Si los eventos vienen del EEG, sus tiempos estan en la escala de las
-    # plataformas (son sus etiquetas de entrenamiento): se reusa el desfase ya estimado.
     if desfase is None:
-        desfase = estimar_desfase(ciclos_fp, ciclos_imu, t_os, rod_os, t_imu, rod_imu)
-        print(f"  Desfase total IMU - plataformas: {desfase:.3f} s "
+        desfase = estimar_desfase(ciclos_eeg, ciclos_imu, t_os, rod_os, t_imu, rod_imu)
+        print(f"  Desfase IMU - eventos del EEG (estimado): {desfase:.3f} s "
               f"(se corrige antes de comparar en el tiempo)")
     else:
         print(f"  Desfase IMU - plataformas (estimado con los contactos): {desfase:.3f} s")
@@ -869,7 +858,7 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
     # --- Parametros temporales
     print(f"\n  {'Pie':<12}{'Fuente':<14}{'Ciclos':>8}{'Ciclo (s)':>16}{'Apoyo (%)':>16}")
     for pie in LADOS:
-        for origen, ciclos in ((fuente, ciclos_fp[pie]), ("IMU", ciclos_imu[pie])):
+        for origen, ciclos in ((fuente, ciclos_eeg[pie]), ("IMU", ciclos_imu[pie])):
             dur, apo = _parametros_temporales(ciclos)
             print(f"  {pie:<12}{origen:<14}{len(ciclos):>8}"
                   f"{dur.mean():>9.3f} ± {dur.std():.3f}{apo.mean():>9.1f} ± {apo.std():.1f}")
@@ -881,12 +870,12 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
     # --- Error de eventos (contactos emparejados tras corregir el desfase)
     print(f"\n  {'Pie':<12}{'Contactos emparejados':>22}{'Error medio (ms)':>18}{'|Error| (ms)':>14}")
     for pie in LADOS:
-        c_fp = np.array([c[0] for c in ciclos_fp[pie]])
+        c_eeg = np.array([c[0] for c in ciclos_eeg[pie]])
         c_imu = np.array([c[0] for c in ciclos_imu[pie]]) - desfase
-        if len(c_fp) == 0 or len(c_imu) == 0:
+        if len(c_eeg) == 0 or len(c_imu) == 0:
             continue
-        idx = np.abs(c_imu[:, None] - c_fp[None, :]).argmin(1)
-        err = c_imu - c_fp[idx]
+        idx = np.abs(c_imu[:, None] - c_eeg[None, :]).argmin(1)
+        err = c_imu - c_eeg[idx]
         err = err[np.abs(err) < 0.25]
         print(f"  {pie:<12}{len(err):>22}{1000 * err.mean():>18.1f}{1000 * np.abs(err).mean():>14.1f}")
         filas.append({"velocidad": vel, "tipo": "eventos", "pie": pie,
@@ -903,7 +892,7 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
                 continue
             y_os = cfg["signo"] * q[f"{cfg['coord']}_{lado}"].to_numpy()
             y_imu = imu["angulos"][(art, pie)]
-            cur_os = _normalizar_ciclos(t_os, y_os, ciclos_fp[pie])
+            cur_os = _normalizar_ciclos(t_os, y_os, ciclos_eeg[pie])
             cur_imu = _normalizar_ciclos(t_imu, y_imu, ciclos_imu[pie])
             m_os, m_imu = cur_os.mean(0), cur_imu.mean(0)
             r, rmse, sesgo, rmse_c = _metricas(m_os, m_imu)
@@ -941,28 +930,9 @@ def comparar_opensim_imu(res_opensim, ciclos_fp, imu, ciclos_imu, carpeta_salida
 COLOR_OS = "tab:blue"
 COLOR_IMU = "tab:orange"
 
-# espectro de Fz con el pico marcado
-def graficar_frecuencia_fp(resultados_frec):
-    figuras = []
-    for vel, por_pie in resultados_frec.items():
-        fig, ax = plt.subplots(figsize=(8.27, 4))
-        for pie, color in zip(por_pie, ("tab:red", "tab:green")):
-            r = por_pie[pie]
-            sel = r["f"] <= 6
-            ax.plot(r["f"][sel], r["pxx"][sel] / r["pxx"][sel].max(), color=color,
-                    label=f"Fz {pie.lower()} (pico {r['f_zancada']:.3f} Hz)")
-        ax.set_xlabel("Frecuencia (Hz)")
-        ax.set_ylabel("PSD normalizada")
-        ax.set_title(f"Espectro de la fuerza vertical - {vel} m/s")
-        ax.grid(alpha=0.3)
-        ax.legend(fontsize=8)
-        fig.tight_layout()
-        figuras.append(fig)
-    return figuras
-
 # los ángulos del mot con contactos/despegues
-def graficar_mot(df_mot, ciclos_fp, vel, duracion=5.0, fuente="FP"):
-    """Coordenadas del .mot con los eventos de las plataformas superpuestos."""
+def graficar_mot(df_mot, ciclos_eeg, vel, duracion=5.0, fuente="EEG"):
+    """Coordenadas del .mot con los eventos decodificados del EEG superpuestos."""
     t0 = df_mot.index[0] + 5.0
     sel = (df_mot.index >= t0) & (df_mot.index <= t0 + duracion)
     fig, ejes = plt.subplots(3, 1, sharex=True, figsize=(8.27, 7))
@@ -971,7 +941,7 @@ def graficar_mot(df_mot, ciclos_fp, vel, duracion=5.0, fuente="FP"):
             color = "tab:green" if lado == "r" else "tab:red"
             ax.plot(df_mot.index[sel], cfg["signo"] * df_mot[f"{cfg['coord']}_{lado}"][sel],
                     color=color, label=pie)
-            for c0, d, _ in ciclos_fp[pie]:
+            for c0, d, _ in ciclos_eeg[pie]:
                 if t0 <= c0 <= t0 + duracion:
                     ax.axvline(c0, color=color, lw=0.6, ls="-")
                 if t0 <= d <= t0 + duracion:
@@ -985,7 +955,7 @@ def graficar_mot(df_mot, ciclos_fp, vel, duracion=5.0, fuente="FP"):
     return fig
 
 # ciclo promedio y desvío, comparando OpenSIM e IMU (por articulación/lado)
-def _figura_ciclos(curvas, vel, fuente="FP"):
+def _figura_ciclos(curvas, vel, fuente="EEG"):
     x = np.linspace(0, 100, N_PUNTOS_FASE)
     fig, ejes = plt.subplots(3, 2, sharex=True, figsize=(8.27, 9))
     for i, art in enumerate(ARTICULACIONES):
@@ -1013,7 +983,7 @@ def _figura_ciclos(curvas, vel, fuente="FP"):
     return fig
 
 # señales openSIM vs IMU alineados
-def _figura_continua(q, imu, desfase, vel, duracion=6.0, fuente="FP"):
+def _figura_continua(q, imu, desfase, vel, duracion=6.0, fuente="EEG"):
     t_os = q.index.to_numpy()
     t0 = t_os[0] + 10.0
     fig, ejes = plt.subplots(3, 1, sharex=True, figsize=(8.27, 7))
@@ -1028,13 +998,13 @@ def _figura_continua(q, imu, desfase, vel, duracion=6.0, fuente="FP"):
         ax.set_ylabel(f"{art}\n(°)", rotation=0, ha="right", va="center")
         ax.grid(alpha=0.3)
     ejes[0].legend(fontsize=8, loc="upper right")
-    ejes[-1].set_xlabel(f"Tiempo de las plataformas (s) — IMU corrido {desfase:.3f} s")
+    ejes[-1].set_xlabel(f"Tiempo (s) — IMU corrido {desfase:.3f} s")
     fig.suptitle(f"Pierna derecha en el tiempo: OpenSim (eventos {fuente}) vs IMU - {vel} m/s")
     fig.tight_layout()
     return fig
 
 # espectro de la rodilla en OpenSIM vs IMU
-def _figura_frecuencias(frecuencias, vel, fuente="FP"):
+def _figura_frecuencias(frecuencias, vel, fuente="EEG"):
     fig, ax = plt.subplots(figsize=(8.27, 4))
     for (nombre, (f0, f, pxx)), color in zip(frecuencias.items(), (COLOR_OS, COLOR_IMU)):
         sel = f <= 5
@@ -1080,18 +1050,20 @@ TIPOS = {"contactos": "Contacto", "despegues": "Despegue"}
 # CARACTERISTICAS DEL EEG
 # ==========================================================
 
+# Obtiene la matriz de los 9 canales en microVolts
+# Obtiene también la frecuencia de muestreo
 def _datos_eeg(raw, canales=CANALES):
     canales = [c for c in canales if c in raw.ch_names]
     return raw.get_data(picks=canales) * 1e6, raw.info["sfreq"], canales
 
-
+# Versión con artefactos de movimiento
 def caracteristicas_baja(raw):
     """EEG filtrado 0.3-4 Hz y llevado a 20 Hz."""
     x, fs, _ = _datos_eeg(raw)
     b, a = butter(2, [0.3, 4.0], btype="band", fs=fs)
     return resample_poly(filtfilt(b, a, x, axis=1), FS_DECOD, int(fs), axis=1)
 
-
+# Versión filtrada (sin artefactos de movimiento)
 def caracteristicas_cortical(raw):
     """Envolvente (log) de mu, beta y gamma baja, suavizada a 4 Hz y llevada a 20 Hz."""
     x, fs, _ = _datos_eeg(raw)
@@ -1104,7 +1076,8 @@ def caracteristicas_cortical(raw):
         salida.append(resample_poly(envolvente, FS_DECOD, int(fs), axis=1))
     return np.vstack(salida)
 
-
+# La entrada del modelo
+# Junta el EEG desde -0,5s hasta 0,5s
 def _matriz_retardos(caract, ventana_s=VENTANA_S):
     """Cada instante ve el EEG desde -0.5 s hasta +0.5 s (decodificacion offline)."""
     n_ret = int(ventana_s * FS_DECOD)
@@ -1119,6 +1092,9 @@ def _matriz_retardos(caract, ventana_s=VENTANA_S):
 # FASE DEL CICLO <-> EVENTOS
 # ==========================================================
 
+# Sube de 0 a 2pi si hay dos eventos iguales consecutivos
+# Básicamente coloca "cada parte del ciclo entre eventos en una fase"
+# Por ejemplo, al inicio del ciclo (primer contacto = primer evento), va a estar a 0° y al final a 360° (segundo contacto)
 def _fase_objetivo(t_eventos, t):
     """Fase 0-2pi entre eventos consecutivos del mismo tipo (NaN fuera de rango)."""
     fase = np.full(len(t), np.nan)
@@ -1127,7 +1103,12 @@ def _fase_objetivo(t_eventos, t):
         fase[sel] = 2 * np.pi * (t[sel] - a) / (b - a)
     return fase
 
-
+# Cuando la fase predicha cae de 2pi a cero, es que ocurrió un evento
+# Ubica el evento interpolando muestras
+# Hace lo opuesto, recibe la fase predicha según los eventos, y "razona" que cuando pasa de 360° a 0° es porque se completó un ciclo y pasó a otro
+# Marca estos eventos!
+# Va a servir una vez que el modelo prediga una fase solo viendo el EEG
+# Cuando nuestro modelo vea el EEG y devuelva en qué fase está, esta función lo vuelve al dominio del tiempo
 def _eventos_desde_fase(t, fase, separacion_min):
     """Instantes donde la fase predicha vuelve de 2pi a 0 (interpolado entre muestras)."""
     saltos = np.flatnonzero(np.diff(fase) < -np.pi)
@@ -1150,7 +1131,31 @@ def _eventos_desde_fase(t, fase, separacion_min):
 # DECODIFICACION
 # ==========================================================
 
-def decodificar_eventos(raw, eventos_fp, version="baja", fs_fp=FS_FP):
+# Se corta el registro de EEG en 5 tramos
+# Antes, con la función fase_objetivo, se razona a qué fase (en grados) corresponde cada parte del ciclo
+#       Principio del ciclo (primer contacto) --> 0°
+#       Fin del ciclo (segundo contacto) --> 360°
+#       Con información previa de las plataformas de fuerza!
+#       Tiene cada paso separado
+# Al modelo se lo entrena con 4 de esos 5 tramos
+# Se hace para 4 eventos: contacto y despegue de cada pie
+# El modelo va a ver "tramos circundantes" a cada instante, para entender en cada momento qué debería haber alrededor (para predecir)
+# Con los "numerosos 4 tramos del mismo EEG" se entrena al modelo para entender la relación EEG <--> fase
+#       Cada momento del EEG ya tiene su fase (calculada con las plataformas)
+#       El modelo ve tanto el EEG como las fases (en grados) de la marcha (el recorrido de 0° a 360° en un ciclo completo)
+#       De esta manera, puede relacionar movimientos del EEG con cambios de fase (ejemplo --> temblores que indican fase cerca de 0°/360°)
+#       Ajustando pesos y coeficientes puede llegar a que esos temblores de EEG se corresponden a un evento en particular (pisada)
+#       (Aprendizaje = regresión lineal)
+#       Sin embargo hay una penalización (ridge) para evitar que se ajuste de más a esos tramos de entrenamiento
+# Una vez que el modelo ya aprendió una "regla" para relacionar EEG con fases, le damos el quinto segmento que no vió
+# A partir de eso, predice el seno y el coseno de la fase que corresponde a cada momento del EEG
+#       En todo momento la fase se expresa como suma de senos y cosenos y no en grados
+#       Es utilizando la función arctan2 que se pasa de esta suma a los grados
+# Esto se hace cinco veces (cambiando qué tramo quedó afuera de los cinco) hasta tener una predicción completa del registro
+# Con arctan2 se pasa del seno y coseno predichos a la fase en grados
+# Para pasar de fase a eventos se usa _eventos_desde_fase: detecta donde la fase vuelve de 360° a 0°
+# (gracias al seno y coseno, 0° = 360°) y ahi marca el evento
+def decodificar_eventos(raw, eventos_fp, version="baja", fs_eventos=FS_EVENTOS):
     """
     Decodifica contactos y despegues de ambos pies a partir del EEG.
     Devuelve un diccionario con el mismo formato que detectar_eventos()
@@ -1164,7 +1169,7 @@ def decodificar_eventos(raw, eventos_fp, version="baja", fs_fp=FS_FP):
     claves, columnas = [], []
     for tipo in TIPOS:
         for pie in PIES:
-            fase = _fase_objetivo(eventos_fp[tipo][pie] / fs_fp, t)
+            fase = _fase_objetivo(eventos_fp[tipo][pie] / fs_eventos, t)
             claves.append((tipo, pie))
             columnas += [np.sin(fase), np.cos(fase)]
     objetivo = np.column_stack(columnas)
@@ -1176,25 +1181,26 @@ def decodificar_eventos(raw, eventos_fp, version="baja", fs_fp=FS_FP):
         modelo = Ridge(alpha=ALFA_RIDGE).fit(matriz[entrenamiento], objetivo[entrenamiento])
         prediccion[bloque] = modelo.predict(matriz[bloque])
 
-    ciclo_medio = np.median(np.diff(eventos_fp["contactos"]["Derecha"])) / fs_fp
+    ciclo_medio = np.median(np.diff(eventos_fp["contactos"]["Derecha"])) / fs_eventos
     eventos = {"tiempo": t, "contactos": {}, "despegues": {}, "fases": {}}
     for j, (tipo, pie) in enumerate(claves):
         fase_pred = np.mod(np.arctan2(prediccion[:, 2 * j], prediccion[:, 2 * j + 1]), 2 * np.pi)
         t_ev = _eventos_desde_fase(t, fase_pred, separacion_min=0.6 * ciclo_medio)
-        eventos[tipo][pie] = np.round(t_ev * fs_fp).astype(int)
-        eventos["fases"][(tipo, pie)] = (fase_pred, _fase_objetivo(eventos_fp[tipo][pie] / fs_fp, t))
+        eventos[tipo][pie] = np.round(t_ev * fs_eventos).astype(int)
+        eventos["fases"][(tipo, pie)] = (fase_pred, _fase_objetivo(eventos_fp[tipo][pie] / fs_eventos, t))
     return eventos
 
-
-def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_fp=FS_FP, tolerancia=0.3):
+# Compara los eventos con los obtenidos previamente con las plataformas de fuerza
+# Calcula estadísticos
+def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_eventos=FS_EVENTOS, tolerancia=0.3):
     """Compara los eventos decodificados con los de las plataformas."""
     filas = []
     t_fin = eventos_eeg["tiempo"][-1]
     for tipo, nombre in TIPOS.items():
         for pie in PIES:
-            real = eventos_fp[tipo][pie] / fs_fp
+            real = eventos_fp[tipo][pie] / fs_eventos
             real = real[(real > VENTANA_S) & (real < t_fin - VENTANA_S)]
-            pred = eventos_eeg[tipo][pie] / fs_fp
+            pred = eventos_eeg[tipo][pie] / fs_eventos
             if len(pred) == 0:
                 continue
             err = pred[:, None] - real[None, :]
@@ -1222,6 +1228,7 @@ def evaluar_eventos(eventos_eeg, eventos_fp, vel, version, fs_fp=FS_FP, toleranc
 # FIGURAS
 # ==========================================================
 
+# Grafica la fase real vs. la predicha (decodificada) por el modelo
 def graficar_fase(eventos_eeg, vel, version, inicio=10.0, duracion=6.0):
     t = eventos_eeg["tiempo"]
     sel = (t >= inicio) & (t <= inicio + duracion)
@@ -1241,7 +1248,7 @@ def graficar_fase(eventos_eeg, vel, version, inicio=10.0, duracion=6.0):
     fig.tight_layout()
     return fig
 
-
+# Grafica el error de la decodificación
 def graficar_errores_decodificacion(filas):
     """Error de los contactos decodificados por version y velocidad."""
     import pandas as pd
@@ -1270,6 +1277,7 @@ def graficar_errores_decodificacion(filas):
 # ANALISIS DE FRECUENCIAS DEL EEG
 # ==========================================================
 
+# Pico de la PSD interpretado como paso
 def analizar_frecuencia_eeg(dict_eeg, canales=("C3", "Cz", "C4"), fmin=0.4, fmax=3.0):
     """
     Pico de la PSD (Welch) del EEG entre 0.4 y 3 Hz en los canales centrales.
@@ -1304,6 +1312,7 @@ def analizar_frecuencia_eeg(dict_eeg, canales=("C3", "Cz", "C4"), fmin=0.4, fmax
     return resultados
 
 
+# Gráfico del espectro de la EEG
 def graficar_frecuencia_eeg(resultados):
     figuras = []
     for vel, por_canal in resultados.items():
@@ -1320,7 +1329,8 @@ def graficar_frecuencia_eeg(resultados):
         figuras.append(fig)
     return figuras
 
-
+# Decodificación de la marcha según EEG por versión
+# Usa el modelo definido en decodificar_eventos, evalúa el resultado y lo grafica
 def decodificar_marcha_eeg(dict_eeg, dict_eventos, versiones=("baja", "cortical")):
     """
     Decodifica los eventos de cada velocidad con cada version de caracteristicas.
