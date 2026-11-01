@@ -1,8 +1,8 @@
-PWD c:/Users/Joaquin Basualdo/Desktop/ITBA/4to 1er cuatri/PSIB/Trabajos finales/Final TPS/Informe
+PWD c:/Users/facun/OneDrive/Documentos/GitHub/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso/Informe
 INPUT c:/texlive/2026/texmf.cnf
 INPUT c:/texlive/2026/texmf-dist/web2c/texmf.cnf
 INPUT c:/texlive/2026/texmf-var/web2c/pdftex/pdflatex.fmt
-INPUT c:/Users/Joaquin Basualdo/Desktop/ITBA/4to 1er cuatri/PSIB/Trabajos finales/Final TPS/Informe/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.tex
+INPUT c:/Users/facun/OneDrive/Documentos/GitHub/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso/Informe/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.tex
 OUTPUT PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.log
 INPUT c:/texlive/2026/texmf-dist/tex/latex/base/article.cls
 INPUT c:/texlive/2026/texmf-dist/tex/latex/base/article.cls

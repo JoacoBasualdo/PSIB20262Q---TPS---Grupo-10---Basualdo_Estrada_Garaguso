@@ -149,7 +149,6 @@ Firma y Fecha & \\ \hline
 % índice, anexo ni bibliografía.
 % =============================================================================
 
-
 \section{Introducción}
 
 \subsection{Marco Teórico}
@@ -164,18 +163,21 @@ La marcha humana es un movimiento cíclico que requiere la coordinación del sis
     \caption{Áreas corticales involucradas en el control motor.}
 \end{figure}
 
+
 \subsubsection{EEG}
 
 La electroencefalografía (EEG) es una técnica no invasiva que registra, mediante electrodos sobre el cuero cabelludo, variaciones de potencial eléctrico originadas principalmente por la actividad postsináptica sincronizada de poblaciones neuronales corticales. La disposición de los electrodos suele seguir el sistema internacional 10--20, que permite ubicar los canales respecto de distintas regiones cerebrales.
 
-En el estudio de la marcha resultan relevantes las oscilaciones sensoriomotoras de las bandas alfa/mu (8--13 Hz) y beta (13--30 Hz), cuya potencia puede disminuir durante la preparación y ejecución del movimiento, fenómeno denominado desincronización relacionada con eventos (ERD). Asimismo, la actividad gamma baja (24--40 Hz) puede presentar modulaciones periódicas asociadas al ciclo de marcha. Por ello, el análisis tiempo-frecuencia permite estudiar la evolución de estas bandas y su relación con las distintas fases de la locomoción, considerando los posibles artefactos de movimiento y actividad muscular presentes en el EEG.
+En el estudio de la marcha resultan relevantes las oscilaciones sensoriomotoras de las bandas alfa/mu (8--13 Hz) y beta (13--30 Hz), cuya potencia puede disminuir durante la preparación y ejecución del movimiento, fenómeno denominado desincronización relacionada con eventos (ERD). Asimismo, la actividad gamma baja (24--40 Hz) puede presentar modulaciones periódicas asociadas al ciclo de marcha. Cabe destacar que las bandas beta y gamma baja se superponen entre 24 y 30 Hz, por lo que se analizan como intervalos espectrales parcialmente solapados y no como componentes independientes.
+
+Por ello, el análisis tiempo-frecuencia permite estudiar la evolución de estas bandas y su relación con las distintas fases de la locomoción, considerando los posibles artefactos de movimiento y actividad muscular presentes en el EEG.
 
 
 \subsection{Estado del arte}
 
-El análisis de la marcha resulta fundamental para comprender el control motor y estudiar alteraciones asociadas a enfermedades neurológicas y musculoesqueléticas. Sin embargo, Katmah y colaboradores (2026) señalan que muchos conjuntos de datos estudian de forma aislada la actividad cerebral, muscular o biomecánica, dificultando el análisis de sus interacciones.
+El análisis de la marcha resulta fundamental para comprender el control motor y estudiar alteraciones asociadas a enfermedades neurológicas y musculoesqueléticas. Sin embargo, Katmah y colaboradores señalan que muchos conjuntos de datos estudian de forma aislada la actividad cerebral, muscular o biomecánica, dificultando el análisis de sus interacciones.
 
-Para abordar esta limitación, los investigadores de la Universidad Khalifa desarrollaron un dataset multimodal con registros de 59 adultos sanos ($24\pm5$ años), caminando a velocidades de 0,5; 0,75 y 1,0 m/s. Incluye 19 canales de EEG (300 Hz), 12 canales de EMG, 17 sensores IMU (60 Hz) y plataformas de fuerza bilaterales. La integración temporal de estas señales permite relacionar la actividad cortical con la activación muscular y los eventos biomecánicos de la marcha, proporcionando una base para desarrollar y validar algoritmos de clasificación.
+Para abordar esta limitación, los investigadores de la Universidad Khalifa desarrollaron el conjunto de datos \textit{A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults}, con registros sincronizados de 59 adultos sanos ($24\pm5$ años), caminando a velocidades de 0,5; 0,75 y 1,0 m/s. Incluye 19 canales de EEG (300 Hz), 12 canales de EMG, 17 sensores IMU (60 Hz) y mediciones de fuerzas de reacción del suelo. La integración temporal de estas señales permite relacionar la actividad cortical con la activación muscular y los eventos biomecánicos de la marcha, proporcionando una base para desarrollar y validar algoritmos de clasificación.
 
 \begin{figure}[htbp]
     \centering
@@ -199,18 +201,11 @@ Para el presente trabajo se seleccionaron seis canales de EEG: C3, Cz y C4, sobr
 
 Lorach y colaboradores (2023), en \textit{Walking naturally after spinal cord injury using a brain--spine interface}, demostraron una aplicación de la decodificación de señales corticales mediante una interfaz cerebro--médula espinal invasiva, capaz de vincular la actividad cerebral con estimulación medular para facilitar la marcha. Si bien su tecnología difiere del EEG de superficie empleado aquí, constituye un antecedente del potencial de las interfaces neuronales en neurorrehabilitación.
 
-Seeber y colaboradores (2014) estudiaron EEG de alta densidad durante la marcha y observaron una disminución de potencia en las bandas mu y beta, junto con una modulación periódica de gamma baja (24--40 Hz) asociada al ciclo. Para cuantificarla utilizaron el índice \textit{Gait Phase Modulation} (GPM), que considera dos períodos de modulación por ciclo completo. Este resultado motiva el análisis tiempo-frecuencia de las bandas mu, beta y gamma baja en los seis canales seleccionados, teniendo en cuenta las limitaciones espaciales y los posibles artefactos del EEG de superficie.
+Seeber y colaboradores (2014), en \textit{EEG beta suppression and low gamma modulation are different elements of human upright walking}, estudiaron EEG de alta densidad durante la marcha y observaron una disminución de potencia en las bandas mu y beta, junto con una modulación periódica de gamma baja (24--40 Hz) asociada al ciclo. Para cuantificarla utilizaron el índice \textit{Gait Phase Modulation} (GPM), que considera dos períodos de modulación por ciclo completo. Este resultado motiva el análisis tiempo-frecuencia de las bandas mu, beta y gamma baja en los seis canales seleccionados, teniendo en cuenta las limitaciones espaciales y los posibles artefactos del EEG de superficie.
 
 \subsection{Objetivos}
 
-El objetivo general es desarrollar e implementar un algoritmo computacional capaz de procesar señales electroencefalográficas (EEG) para decodificar, analizar y clasificar de manera precisa las distintas fases del ciclo de la marcha humana a partir de la actividad cortical. Los objetivos específicos son:
-\begin{itemize}
-    \item Diseñar una arquitectura de procesamiento de señales que permita extraer las características espectrales y temporales relevantes del EEG asociadas a la intención motora y la locomoción.
-    \item Integrar los parámetros de clasificación obtenidos con el entorno de OpenSim, con el fin de generar una representación visual y cinemática precisa de la marcha basada en el análisis cerebra
-    \item Procesar y utilizar los registros multimodales de los IMU como método de validación objetiva.
-\end{itemize}
-
-Si se realiza una proyección a futuro, se busca un modelo computacionales para el desarrollo de interfaces cerebro-máquina (BCI) no invasivas orientadas a la neurorrehabilitación motora. De manera hipotética, al lograr una decodificación robusta de los correlatos electroencefalográficos vinculados al proceso de marcha, este algoritmo podría integrarse como el núcleo lógico en el sistema de control de exoesqueletos robóticos.
+El objetivo es desarrollar un algoritmo que analice señales de EEG para identificar y clasificar las fases de apoyo y balanceo de la marcha humana. Para ello, se extraerán características temporales y espectrales del EEG y se integrarán las fases estimadas en OpenSim para simular el movimiento. A partir de esta simulación, se obtendrán señales de sensores inerciales (IMU) simulados, que serán contrastadas con los registros experimentales de IMU del conjunto de datos para evaluar la correspondencia entre el movimiento simulado y el real.
 
 \section{Materiales y Métodos}
 \subsection{OpenSIM}
