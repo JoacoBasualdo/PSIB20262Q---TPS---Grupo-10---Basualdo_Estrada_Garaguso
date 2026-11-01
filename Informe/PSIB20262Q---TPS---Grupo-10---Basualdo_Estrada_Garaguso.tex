@@ -149,98 +149,132 @@ Firma y Fecha & \\ \hline
 % índice, anexo ni bibliografía.
 % =============================================================================
 
+
 \section{Introducción}
 
-
 \subsection{Marco Teórico}
+
 \subsubsection{Marcha}
 
+La marcha humana es un movimiento cíclico que requiere la coordinación del sistema nervioso central y el sistema musculoesquelético. Cada ciclo comprende una fase de apoyo (\textit{stance}), de aproximadamente el 60\,\%, y una fase de balanceo (\textit{swing}), que ocupa el 40\,\% restante. Su control involucra áreas corticales encargadas de planificar y ejecutar el movimiento, como la corteza premotora, el área motora suplementaria y la corteza motora primaria. Los ganglios basales y el cerebelo contribuyen a la coordinación y al equilibrio, mientras que los generadores centrales de patrones de la médula espinal participan en la organización rítmica de la locomoción.
 
-La marcha humana es un proceso cíclico y rítmico que requiere una coordinación precisa entre el sistema nervioso central (SNC) y el sistema musculoesquelético. Desde el punto de vista biomecánico, un ciclo de marcha estándar se divide en dos fases principales: la fase de apoyo (stance), que constituye aproximadamente el 60 \% del ciclo y comienza cuando el talón contacta el suelo para soportar el peso corporal; y la fase de balanceo (swing), que abarca el 40 \% restante y ocurre cuando la extremidad se eleva y avanza hacia adelante en el aire. Estos movimientos requieren de una secuenciación compleja de contracciones musculares, constituyendo lo que se denomina como patrón motor de la marcha refleja.
-
-El sistema nervioso central cumple un rol fundamental en este proceso. El comando voluntario, el inicio y la planificación del movimiento se originan en la corteza cerebral, específicamente en el área motora suplementaria (SMA) y la corteza premotora. Este plan motor es ejecutado por la corteza motora primaria (M1), cuya representación somatotópica para los miembros inferiores se localiza en la región medial de los hemisferios (cisura interhemisférica). A nivel subcortical, los ganglios basales y el cerebelo actúan en tiempo real para modular el ritmo, la amplitud del paso, la coordinación fina y el equilibrio postural. Estas señales descendentes modulan los circuitos espinales conocidos como Generadores Centrales de Patrones (CPGs), que automatizan la locomoción.
-
-\vspace{1cm}
-Cita bibliográfica: https://archive.org/details/kandel-e.-r.-j.-h.-schwartz-y-t.-m.-jessell.-principios-de-neurociencia/page/737/mode/1up (Seccion 38, pag 750)
-
-\begin{figure}[h]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Imagenes/CortezaMotora.png}
-    \caption{Descripción de la imagen.}
+    \caption{Áreas corticales involucradas en el control motor.}
 \end{figure}
 
-\vspace{1cm}
 
 \subsubsection{EEG}
 
+La electroencefalografía (EEG) es una técnica no invasiva que registra, mediante electrodos sobre el cuero cabelludo, variaciones de potencial eléctrico originadas principalmente por la actividad postsináptica sincronizada de poblaciones neuronales corticales. La disposición de los electrodos suele seguir el sistema internacional 10--20, que permite ubicar los canales respecto de distintas regiones cerebrales.
+
+En el estudio de la marcha resultan relevantes las oscilaciones sensoriomotoras de las bandas alfa/mu (8--13 Hz) y beta (13--30 Hz), cuya potencia puede disminuir durante la preparación y ejecución del movimiento, fenómeno denominado desincronización relacionada con eventos (ERD). Asimismo, la actividad gamma baja (24--40 Hz) puede presentar modulaciones periódicas asociadas al ciclo de marcha. Cabe destacar que las bandas beta y gamma baja se superponen entre 24 y 30 Hz, por lo que se analizan como intervalos espectrales parcialmente solapados y no como componentes independientes.
+
+Por ello, el análisis tiempo-frecuencia permite estudiar la evolución de estas bandas y su relación con las distintas fases de la locomoción, considerando los posibles artefactos de movimiento y actividad muscular presentes en el EEG.
+
+
 \subsection{Estado del arte}
-Este dataset fue publicado por un conjunto de investigadores de la Universidad Khalifa en Emiratos Árabes Unidos en el artículo \textit{"A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults"}. Estos investigadores notaron la necesidad de contar con datasets multimodales que integren la actividad neuronal, muscular, cinemática y cinética de forma sincronizada, ya que estos conjuntos de datos proveen una gran representación de la locomoción humana y resultan útiles para validar modelos computacionales de la marcha y desarrollar algoritmos de \textit{machine learning}.
 
-Para la creación de este dataset, se obtuvieron registros sincronizados de 59 pacientes sanos de $24 \pm 5$ años, de ambos sexos y con diferentes Índices de Masa Corporal. A estos jóvenes adultos se les solicitó caminar en una cinta a distintas velocidades (0.5, 0.75 y 1.0 m/s) con un minuto de recolección de datos por prueba. El \textit{setup} experimental incluía 19 canales de EEG muestreados a 300 Hz utilizando sistemas de electrodos secos bajo el estándar internacional 10-20, 12 sensores de EMG en los principales músculos del tren inferior (usando el sistema Delsys Trigno Wireless EMG), 17 sensores IMU ($fs = 60$ Hz) y una plataforma de fuerza bilateral.
+El análisis de la marcha resulta fundamental para comprender el control motor y estudiar alteraciones asociadas a enfermedades neurológicas y musculoesqueléticas. Sin embargo, Katmah y colaboradores señalan que muchos conjuntos de datos estudian de forma aislada la actividad cerebral, muscular o biomecánica, dificultando el análisis de sus interacciones.
 
-\begin{figure}[h]
+Para abordar esta limitación, los investigadores de la Universidad Khalifa desarrollaron el conjunto de datos \textit{A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults}, con registros sincronizados de 59 adultos sanos ($24\pm5$ años), caminando a velocidades de 0,5; 0,75 y 1,0 m/s. Incluye 19 canales de EEG (300 Hz), 12 canales de EMG, 17 sensores IMU (60 Hz) y mediciones de fuerzas de reacción del suelo. La integración temporal de estas señales permite relacionar la actividad cortical con la activación muscular y los eventos biomecánicos de la marcha, proporcionando una base para desarrollar y validar algoritmos de clasificación.
+
+\begin{figure}[htbp]
     \centering
-    
-    % --- Primera imagen (Izquierda) ---
     \begin{subfigure}{0.45\textwidth}
         \centering
-        % \linewidth hace que la imagen ocupe el ancho disponible de la subfigura
         \includegraphics[width=\linewidth]{Imagenes/Sistema 10-20.png}
-        \caption{Descripción de la imagen A}
+        \caption{Distribución de electrodos.}
         \label{fig:subim1}
-    \end{subfigure}\hfill % El \hfill empuja las imágenes hacia los costados
-    % --- Segunda imagen (Derecha) ---
+    \end{subfigure}\hfill
     \begin{subfigure}{0.45\textwidth}
         \centering
         \includegraphics[width=\linewidth]{Imagenes/Setup.png}
-        \caption{Descripción de la imagen B}
+        \caption{Configuración experimental.}
         \label{fig:subim2}
     \end{subfigure}
-    
-    \caption{Título general que describe lo que se ve en ambas imágenes en conjunto.}
+    \caption{Sistema de adquisición de señales del conjunto de datos.}
     \label{fig:imagenes_juntas}
 \end{figure}
 
+Para el presente trabajo se seleccionaron seis canales de EEG: C3, Cz y C4, sobre regiones centrales vinculadas con la actividad sensoriomotora, y P3, Pz y P4, sobre regiones parietales asociadas a la integración sensorial. Esta selección concentra el análisis en áreas de interés para el control de la marcha.
 
-Como se observa en la distribución de electrodos presentada en el artículo original del dataset, las regiones centrales y parietales resultan de especial interés para estudiar la actividad cerebral asociada al control sensoriomotor de la marcha. En consecuencia, para el presente trabajo se seleccionaron seis canales de EEG: C3, Cz, C4, P3, Pz y P4. Los tres primeros permiten estudiar la actividad registrada sobre regiones centrales, vinculadas con el procesamiento motor y sensoriomotor, mientras que los canales parietales aportan información de regiones relacionadas con la integración sensorial. Esta selección permite ampliar la cobertura espacial del análisis, manteniendo un enfoque sobre áreas relevantes para la locomoción.
+Lorach y colaboradores (2023), en \textit{Walking naturally after spinal cord injury using a brain--spine interface}, demostraron una aplicación de la decodificación de señales corticales mediante una interfaz cerebro--médula espinal invasiva, capaz de vincular la actividad cerebral con estimulación medular para facilitar la marcha. Si bien su tecnología difiere del EEG de superficie empleado aquí, constituye un antecedente del potencial de las interfaces neuronales en neurorrehabilitación.
 
-Por otro lado, otra investigación fundamental para el desarrollo de este trabajo práctico fue la publicada en el artículo \textit{"Walking naturally after spinal cord injury using a brain–spine interface"}. Cabe destacar que los integrantes de este grupo de trabajo realizaron previamente una monografía para la materia "16.03 - Fisiología" basada en esta investigación. En síntesis, el estudio detalla la captación de señales electrocorticográficas (ECoG) mediante electrodos implantados, seguido de un procesamiento con modelos de \textit{machine learning} para enviar información a un arreglo implantado de 16 electrodos que produce estimulación medular y genera el movimiento.
-
-En dicho artículo se menciona que, dependiendo de las bandas de frecuencia, es posible identificar el tipo de procesamiento neuronal de la persona. Las ondas Beta (13-30 Hz) determinan la desinhibición y la preparación del movimiento; las ondas Gamma (30-200 Hz) generan la ejecución del movimiento y la coordinación fina; y por último, las ondas Alpha (8-12 Hz) se suprimen cuando existe intención de moverse. A partir del procesamiento de todas estas señales, es factible predecir la intención del paciente, dado que la corteza motora primaria es la encargada de iniciar los procesos de contracción voluntaria. Estos conceptos configuran y respaldan el objetivo central del presente trabajo práctico.
-\vspace{1cm}
-
-Otro antecedente relevante para este trabajo es la investigación de Seeber y colaboradores (2014), titulada \textit{``EEG beta suppression and low gamma modulation are different elements of human upright walking''}. Los autores analizaron la actividad cortical asociada a la locomoción en diez sujetos sanos, mediante registros de EEG de alta densidad (120 canales) durante la marcha asistida por un dispositivo robótico. A partir de técnicas de reconstrucción de fuentes corticales, estudiaron tanto las variaciones de actividad respecto de la posición de pie como los cambios espectrales asociados a las distintas fases del ciclo de marcha.
-
-Los resultados permitieron distinguir dos fenómenos. Por un lado, se observó una disminución sostenida de la potencia en las bandas mu (10--12 Hz) y beta (18--30 Hz) durante la marcha, conocida como desincronización relacionada con eventos (\textit{Event-Related Desynchronization}, ERD). Por otro lado, se identificó una modulación periódica de la amplitud de las oscilaciones gamma bajas (24--40 Hz), sincronizada con el ciclo de marcha y localizada principalmente en regiones sensoriomotoras. Para cuantificar este comportamiento, los investigadores introdujeron el índice \textit{Gait Phase Modulation} (GPM), que mide la modulación de la amplitud espectral considerando dos períodos por ciclo completo, asociados a la alternancia de los pasos. En el estudio, los máximos de modulación se concentraron principalmente entre 28 y 36 Hz.
-
-Esta investigación constituye una referencia metodológica para el presente trabajo, ya que demuestra la importancia de analizar no solamente la potencia espectral del EEG, sino también su evolución temporal respecto de las fases de marcha. En consecuencia, se propone estudiar las bandas mu, beta y gamma baja mediante transformadas tiempo-frecuencia y evaluar su periodicidad utilizando el índice GPM. A diferencia del estudio original, que utilizó reconstrucción de fuentes corticales, nuestro análisis se realiza sobre seis canales de EEG ubicados en regiones centrales y parietales (C3, Cz, C4, P3, Pz y P4). Por lo tanto, la modulación detectada debe interpretarse considerando las limitaciones espaciales del EEG de superficie.
+Seeber y colaboradores (2014), en \textit{EEG beta suppression and low gamma modulation are different elements of human upright walking}, estudiaron EEG de alta densidad durante la marcha y observaron una disminución de potencia en las bandas mu y beta, junto con una modulación periódica de gamma baja (24--40 Hz) asociada al ciclo. Para cuantificarla utilizaron el índice \textit{Gait Phase Modulation} (GPM), que considera dos períodos de modulación por ciclo completo. Este resultado motiva el análisis tiempo-frecuencia de las bandas mu, beta y gamma baja en los seis canales seleccionados, teniendo en cuenta las limitaciones espaciales y los posibles artefactos del EEG de superficie.
 
 
 \subsection{Objetivos}
 
-El objetivo general es desarrollar e implementar un algoritmo computacional capaz de procesar señales electroencefalográficas (EEG) para decodificar, analizar y clasificar de manera precisa las distintas fases del ciclo de la marcha humana a partir de la actividad cortical. Los objetivos específicos son:
-\begin{itemize}
-    \item Diseñar una arquitectura de procesamiento de señales que permita extraer las características espectrales y temporales relevantes del EEG asociadas a la intención motora y la locomoción.
-    \item Integrar los parámetros de clasificación obtenidos con el entorno de OpenSim, con el fin de generar una representación visual y cinemática precisa de la marcha basada en el análisis cerebra
-    \item Procesar y utilizar los registros multimodales de los IMU como método de validación objetiva.
-\end{itemize}
+El objetivo es desarrollar un algoritmo que analice señales de EEG para identificar y clasificar las fases de apoyo y balanceo de la marcha humana. Para ello, se extraerán características temporales y espectrales del EEG y se integrarán las fases estimadas en OpenSim para simular el movimiento. A partir de esta simulación, se obtendrán señales de sensores inerciales (IMU) simulados, que serán contrastadas con los registros experimentales de IMU del conjunto de datos para evaluar la correspondencia entre el movimiento simulado y el real.
 
-Si se realiza una proyección a futuro, se busca un modelo computacionales para el desarrollo de interfaces cerebro-máquina (BCI) no invasivas orientadas a la neurorrehabilitación motora. De manera hipotética, al lograr una decodificación robusta de los correlatos electroencefalográficos vinculados al proceso de marcha, este algoritmo podría integrarse como el núcleo lógico en el sistema de control de exoesqueletos robóticos.
 
 \section{Materiales y Métodos}
-\subsection{OpenSIM}
 
-OpenSim es un entorno de software de código abierto desarrollado por el Centro Nacional de Simulación Basada en Física de Estructuras Biológicas de la Universidad de Stanford. Su arquitectura permite desarrollar modelos tridimensionales de alta fidelidad fisiológica y analizar las fuerzas subyacentes que generan el movimiento
+Se desarrolló un programa en Python para procesar señales de EEG, identificar eventos de marcha y realizar un análisis biomecánico mediante OpenSim. Se utilizaron las bibliotecas MNE, NumPy y SciPy para el procesamiento de señales, Matplotlib para la visualización y PySide6 para la interfaz gráfica.
 
+\subsection{Datos utilizados}
 
-El núcleo de OpenSim está construido sobre una serie de herramientas de cálculo computacional avanzado. Entre sus funciones principales se destacan la cinemática inversa, que permite calcular los ángulos articulares óptimos; la dinámica inversa, utilizada para determinar los torques articulares netos; y la optimización estática, que resuelve el problema de la redundancia muscular al estimar las fuerzas musculares individuales. Asimismo, la plataforma permite realizar simulaciones dinámicas, donde un modelo es impulsado por señales de excitación muscular para predecir la cinemática resultante.
+Se empleó el conjunto de datos multimodal de Katmah y colaboradores, utilizando registros correspondientes a caminatas de 0,5; 0,75 y 1,0 m/s. Se seleccionaron seis canales de EEG (C3, Cz, C4, P3, Pz y P4), muestreados a 300 Hz. Adicionalmente, se utilizaron plataformas de fuerza bilaterales (1000 Hz) para identificar las fases de marcha y registros cinemáticos de sensores IMU Xsens (60 Hz) para la comparación con OpenSim.
 
+\subsection{Preprocesamiento del EEG}
 
-Una de las grandes ventajas de OpenSim es su capacidad de integración con lenguajes de programación de alto nivel a través de su API. Esta característica resulta fundamental para el desarrollo de pipelines de procesamiento de señales automatizados.
+Inicialmente, se reconstruyó el canal Pz, utilizado como referencia durante la adquisición, y se realizó una rereferenciación respecto del promedio de los electrodos auriculares A1 y A2.
 
+Posteriormente, se implementó un filtrado pasabanda mediante dos filtros FIR de fase lineal diseñados con ventana de Hamming: un pasaaltos de 1 Hz y 991 coeficientes para atenuar la deriva de línea de base, y un pasabajos de 45 Hz y 199 coeficientes para reducir las componentes de alta frecuencia. Ambos filtros se aplicaron mediante el método de filtrado bidireccional \textit{filtfilt}, obteniendo una respuesta de fase cero y evitando retardos temporales.
 
-La integración de OpenSim en el flujo de trabajo computacional permite traducir los resultados de la detección de las fases de la marcha (apoyo y balanceo) en parámetros cinemáticos tangibles. Al visualizar la simulación de la marcha en el modelo musculoesquelético, es posible contrastar las predicciones del modelo neuronal (EEG) con los datos experimentales reales obtenidos mediante electromiografía de superficie (sEMG) y cinemática (IMU). 
+Para evaluar el efecto del filtrado, se estimó la densidad espectral de potencia (PSD) mediante el método de Welch, utilizando segmentos de 2 s, ventana de Hamming y un solapamiento del 50\,\%, comparando los espectros antes y después de cada etapa de filtrado.
 
+\subsection{Detección de eventos y segmentación}
+
+Para detectar los eventos de marcha se utilizó la fuerza vertical ($F_z$) de ambas plataformas. En primer lugar, se corrigió su \textit{offset} mediante una estimación robusta basada en el percentil 20 y la mediana de las muestras de menor amplitud.
+
+Los contactos y despegues se identificaron mediante un método de detección por umbral de 30 N, suprimiendo transiciones espurias inferiores a 100 ms. A partir de los estados de apoyo de ambos pies, se realizó un etiquetado temporal de cuatro fases: doble apoyo inicial, apoyo simple, doble apoyo final y balanceo.
+
+Posteriormente, las etiquetas se trasladaron al EEG mediante correspondencia temporal entre muestras, considerando las frecuencias de adquisición de 300 y 1000 Hz y un desfase asumido de 0 s. Se segmentaron los registros en ciclos delimitados por contactos consecutivos del pie derecho, comenzando desde el segundo ciclo completo. Se descartaron aquellos cuya duración difiriera más de un 30\,\% respecto de la mediana, y se normalizaron temporalmente para permitir su comparación.
+
+\subsection{Control de calidad}
+
+Para detectar ciclos con posibles artefactos se implementó un método de detección robusta de valores atípicos basado en la desviación absoluta mediana (MAD). Se calcularon tres indicadores por canal: amplitud pico a pico, valor RMS centrado respecto de la mediana y máxima diferencia entre muestras consecutivas.
+
+Se consideró sospechoso un ciclo cuando al menos dos indicadores superaban 3,5 desviaciones robustas o uno superaba 7. Los ciclos identificados se excluyeron del análisis posterior, siempre que permaneciera una cantidad suficiente de ciclos válidos.
+
+\subsection{Análisis tiempo-frecuencia}
+
+Se utilizó la transformada de Fourier de tiempo corto (STFT) para caracterizar la evolución espectral del EEG durante la marcha. Se aplicó sobre las señales continuas filtradas mediante ventanas Hann de 0,5 s, con un solapamiento del 90\,\%, analizando frecuencias entre 8 y 40 Hz con una grilla de 1 Hz.
+
+La potencia espectral se calculó como el módulo cuadrado de la STFT y se normalizó respecto de la potencia media durante la marcha, expresando las variaciones porcentuales. Los mapas correspondientes a los ciclos válidos se normalizaron al 0--100\,\% del ciclo y se promediaron.
+
+Se analizaron las bandas mu (8--13 Hz), beta (13--30 Hz) y gamma baja (24--40 Hz), evaluando sus variaciones temporales y las diferencias descriptivas entre fases de marcha.
+
+\subsection{Índice GPM y análisis estadístico}
+
+Siguiendo la metodología de Seeber y colaboradores (2014), se calculó el índice \textit{Gait Phase Modulation} (GPM), que permite cuantificar qué tan intensa y consistente es la modulación de la amplitud espectral del EEG a lo largo del ciclo de marcha. Dado que un ciclo completo incluye un paso de cada pierna, se estudió el segundo armónico, correspondiente a dos períodos de modulación por zancada.
+
+Para calcularlo, se obtuvo la amplitud de la STFT en cada frecuencia y se normalizaron temporalmente los ciclos al 0--100\,\%. Luego, se calculó el coeficiente de Fourier correspondiente al segundo armónico y se promedió entre ciclos, normalizándolo por la desviación estándar de la amplitud espectral. El módulo del resultado constituye el GPM: valores elevados indican una modulación periódica más intensa y consistente entre ciclos.
+
+El análisis se realizó sobre seis canales y 33 frecuencias, totalizando 198 comparaciones por velocidad. Para evaluar la significancia estadística se implementó una prueba no paramétrica de 10.000 permutaciones mediante desplazamientos circulares independientes de los ciclos. Se aplicó la corrección \textit{max-T} para controlar la tasa de error familiar (FWER) al 5\,\%, considerando significativos los valores de $p<0{,}05$ corregidos.
+
+\subsection{Modelado biomecánico mediante OpenSim}
+
+Se utilizó OpenSim, un entorno de simulación musculoesquelética, mediante su API de Python. Se empleó el modelo \textit{gait2392}, personalizado a partir de las medidas antropométricas de cada sujeto disponibles en el archivo \texttt{subject-info.csv}.
+
+La frecuencia de zancada se estimó mediante el método de Welch aplicado a la PSD de la fuerza vertical. Para generar el movimiento se utilizó una plantilla cinemática de referencia, cuyos períodos de apoyo y balanceo se ajustaron temporalmente a los contactos y despegues detectados en las plataformas.
+
+A partir de esta información se generaron archivos \texttt{.mot}, que fueron procesados mediante la herramienta \textit{AnalyzeTool} de OpenSim, utilizando los análisis \textit{Kinematics} y \textit{BodyKinematics} para obtener las trayectorias articulares y el movimiento del modelo.
+
+\subsection{Comparación con los registros IMU}
+
+La cinemática obtenida mediante OpenSim se contrastó con las mediciones experimentales de los IMU Xsens. Como ambos registros no se encontraban sincronizados directamente, se estimó primero el desfase temporal mediante la correspondencia de las duraciones de zancada y posteriormente se refinó mediante correlación cruzada de las señales de rodilla.
+
+Se compararon los ángulos de cadera, rodilla y tobillo de ambas piernas, normalizando los ciclos al 0--100\,\%. La correspondencia se cuantificó mediante el coeficiente de correlación de Pearson ($r$), el error cuadrático medio (RMSE) y el sesgo. También se compararon la frecuencia de zancada, los tiempos de apoyo y los errores temporales en la detección de contactos.
+
+\subsection{Interfaz gráfica}
+
+Se desarrolló una interfaz gráfica denominada \textit{EEGait} mediante PySide6, que permite ejecutar el procesamiento sin interactuar directamente con el código. El usuario puede seleccionar el sujeto y las velocidades disponibles, configurar los parámetros de filtrado, segmentación y control de calidad, e incluir opcionalmente la simulación en OpenSim.
+
+La aplicación ofrece dos modalidades de análisis estadístico: rápida (500 permutaciones) y completa (10.000 permutaciones). Al ejecutar el procesamiento, muestra una barra de progreso y organiza los resultados en pestañas con gráficos y registros de ejecución. Finalmente, permite exportar los resultados a PDF y acceder a la visualización del modelo en OpenSim.
 
 \section{Resultados}
 
