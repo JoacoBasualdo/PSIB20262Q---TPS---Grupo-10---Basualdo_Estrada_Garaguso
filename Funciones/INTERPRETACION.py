@@ -1153,13 +1153,21 @@ def calibrar_fase(fase, t, t_eventos):
 # DECODIFICACION
 # ==========================================================
 
-# Obtiene, a partir del EEG, en que momento ocurren los contactos y despegues de cada pie
-#   1. Arma la senal (baja o cortical) de los 9 canales y su fase instantanea
-#   2. Elige el canal donde los eventos caen siempre en la misma fase (mayor PLV en la calibracion)
-#   3. Para cada evento mide en la calibracion su angulo (de las plataformas, unico dato que se usa)
-#   4. Resta ese angulo a la fase del EEG: asi cada evento queda en 0°
-#   5. Con _eventos_desde_fase marca un evento cada vez que la fase vuelve de 360° a 0°
-# No hay entrenamiento: solo filtrado, Hilbert y un angulo de calibracion por evento
+# Ya no hay modelo ni entrenamiento: la fase se obtiene directamente del EEG
+# Primero se arma la señal de cada canal (version baja o cortical)
+# Se filtra en una banda angosta alrededor de la frecuencia de zancada (+-20 %)
+#       Esa frecuencia sale del espectro del propio EEG (analizar_frecuencia_eeg)
+#       La señal queda casi como una senoidal: sube y baja una vez por zancada
+# Con la transformada de Hilbert se obtiene la fase instantanea de esa senoidal (0° a 360°)
+#       Es la misma idea de fase que en _fase_objetivo, pero sacada del EEG y no de las plataformas
+# Calibracion (primeros 20 s): se mide en que angulo de esa fase cae cada evento
+#       Por ejemplo, el contacto derecho siempre cae cerca de 140° de la fase del EEG
+#       Es el unico dato que se toma de las plataformas (un promedio, no un aprendizaje)
+#       El PLV (0 a 1) dice que tan siempre igual es ese angulo
+# Se elige el canal con mayor PLV (el que sigue mejor el ritmo de la marcha)
+# A la fase del EEG se le resta el angulo de calibracion: asi cada evento queda en 0°
+# Con _eventos_desde_fase se marca un evento cada vez que esa fase pasa de 360° a 0°
+# Se hace para 4 eventos: contacto y despegue de cada pie
 def decodificar_eventos(raw, eventos_fp, f_zancada, version="baja",
                         fs_eventos=FS_EVENTOS, t_calibracion=T_CALIBRACION):
     """
