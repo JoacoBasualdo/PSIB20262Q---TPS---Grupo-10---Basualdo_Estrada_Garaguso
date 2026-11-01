@@ -209,20 +209,72 @@ Seeber y colaboradores (2014), en \textit{EEG beta suppression and low gamma mod
 
 El objetivo es desarrollar un algoritmo que analice señales de EEG para identificar y clasificar las fases de apoyo y balanceo de la marcha humana. Para ello, se extraerán características temporales y espectrales del EEG y se integrarán las fases estimadas en OpenSim para simular el movimiento. A partir de esta simulación, se obtendrán señales de sensores inerciales (IMU) simulados, que serán contrastadas con los registros experimentales de IMU del conjunto de datos para evaluar la correspondencia entre el movimiento simulado y el real.
 
+
 \section{Materiales y Métodos}
-\subsection{OpenSIM}
 
-OpenSim es un entorno de software de código abierto desarrollado por el Centro Nacional de Simulación Basada en Física de Estructuras Biológicas de la Universidad de Stanford. Su arquitectura permite desarrollar modelos tridimensionales de alta fidelidad fisiológica y analizar las fuerzas subyacentes que generan el movimiento
+Se desarrolló un programa en Python para procesar señales de EEG, identificar eventos de marcha y realizar un análisis biomecánico mediante OpenSim. Se utilizaron las bibliotecas MNE, NumPy y SciPy para el procesamiento de señales, Matplotlib para la visualización y PySide6 para la interfaz gráfica.
 
+\subsection{Datos utilizados}
 
-El núcleo de OpenSim está construido sobre una serie de herramientas de cálculo computacional avanzado. Entre sus funciones principales se destacan la cinemática inversa, que permite calcular los ángulos articulares óptimos; la dinámica inversa, utilizada para determinar los torques articulares netos; y la optimización estática, que resuelve el problema de la redundancia muscular al estimar las fuerzas musculares individuales. Asimismo, la plataforma permite realizar simulaciones dinámicas, donde un modelo es impulsado por señales de excitación muscular para predecir la cinemática resultante.
+Se empleó el conjunto de datos multimodal de Katmah y colaboradores, utilizando registros correspondientes a caminatas de 0,5; 0,75 y 1,0 m/s. Se seleccionaron seis canales de EEG (C3, Cz, C4, P3, Pz y P4), muestreados a 300 Hz. Adicionalmente, se utilizaron plataformas de fuerza bilaterales (1000 Hz) para identificar las fases de marcha y registros cinemáticos de sensores IMU Xsens (60 Hz) para la comparación con OpenSim.
 
+\subsection{Preprocesamiento del EEG}
 
-Una de las grandes ventajas de OpenSim es su capacidad de integración con lenguajes de programación de alto nivel a través de su API. Esta característica resulta fundamental para el desarrollo de pipelines de procesamiento de señales automatizados.
+Inicialmente, se reconstruyó el canal Pz, utilizado como referencia durante la adquisición, y se realizó una rereferenciación respecto del promedio de los electrodos auriculares A1 y A2.
 
+Posteriormente, se implementó un filtrado pasabanda mediante dos filtros FIR de fase lineal diseñados con ventana de Hamming: un pasaaltos de 1 Hz y 991 coeficientes para atenuar la deriva de línea de base, y un pasabajos de 45 Hz y 199 coeficientes para reducir las componentes de alta frecuencia. Ambos filtros se aplicaron mediante el método de filtrado bidireccional \textit{filtfilt}, obteniendo una respuesta de fase cero y evitando retardos temporales.
 
-La integración de OpenSim en el flujo de trabajo computacional permite traducir los resultados de la detección de las fases de la marcha (apoyo y balanceo) en parámetros cinemáticos tangibles. Al visualizar la simulación de la marcha en el modelo musculoesquelético, es posible contrastar las predicciones del modelo neuronal (EEG) con los datos experimentales reales obtenidos mediante electromiografía de superficie (sEMG) y cinemática (IMU). 
+Para evaluar el efecto del filtrado, se estimó la densidad espectral de potencia (PSD) mediante el método de Welch, utilizando segmentos de 2 s, ventana de Hamming y un solapamiento del 50\,\%, comparando los espectros antes y después de cada etapa de filtrado.
 
+\subsection{Detección de eventos y segmentación}
+
+Para detectar los eventos de marcha se utilizó la fuerza vertical ($F_z$) de ambas plataformas. En primer lugar, se corrigió su \textit{offset} mediante una estimación robusta basada en el percentil 20 y la mediana de las muestras de menor amplitud.
+
+Los contactos y despegues se identificaron mediante un método de detección por umbral de 30 N, suprimiendo transiciones espurias inferiores a 100 ms. A partir de los estados de apoyo de ambos pies, se realizó un etiquetado temporal de cuatro fases: doble apoyo inicial, apoyo simple, doble apoyo final y balanceo.
+
+Posteriormente, las etiquetas se trasladaron al EEG mediante correspondencia temporal entre muestras, considerando las frecuencias de adquisición de 300 y 1000 Hz y un desfase asumido de 0 s. Se segmentaron los registros en ciclos delimitados por contactos consecutivos del pie derecho, comenzando desde el segundo ciclo completo. Se descartaron aquellos cuya duración difiriera más de un 30\,\% respecto de la mediana, y se normalizaron temporalmente para permitir su comparación.
+
+\subsection{Control de calidad}
+
+Para detectar ciclos con posibles artefactos se implementó un método de detección robusta de valores atípicos basado en la desviación absoluta mediana (MAD). Se calcularon tres indicadores por canal: amplitud pico a pico, valor RMS centrado respecto de la mediana y máxima diferencia entre muestras consecutivas.
+
+Se consideró sospechoso un ciclo cuando al menos dos indicadores superaban 3,5 desviaciones robustas o uno superaba 7. Los ciclos identificados se excluyeron del análisis posterior, siempre que permaneciera una cantidad suficiente de ciclos válidos.
+
+\subsection{Análisis tiempo-frecuencia}
+
+Se utilizó la transformada de Fourier de tiempo corto (STFT) para caracterizar la evolución espectral del EEG durante la marcha. Se aplicó sobre las señales continuas filtradas mediante ventanas Hann de 0,5 s, con un solapamiento del 90\,\%, analizando frecuencias entre 8 y 40 Hz con una grilla de 1 Hz.
+
+La potencia espectral se calculó como el módulo cuadrado de la STFT y se normalizó respecto de la potencia media durante la marcha, expresando las variaciones porcentuales. Los mapas correspondientes a los ciclos válidos se normalizaron al 0--100\,\% del ciclo y se promediaron.
+
+Se analizaron las bandas mu (8--13 Hz), beta (13--30 Hz) y gamma baja (24--40 Hz), evaluando sus variaciones temporales y las diferencias descriptivas entre fases de marcha.
+
+\subsection{Índice GPM y análisis estadístico}
+
+Siguiendo la metodología de Seeber y colaboradores (2014), se calculó el índice \textit{Gait Phase Modulation} (GPM), que permite cuantificar qué tan intensa y consistente es la modulación de la amplitud espectral del EEG a lo largo del ciclo de marcha. Dado que un ciclo completo incluye un paso de cada pierna, se estudió el segundo armónico, correspondiente a dos períodos de modulación por zancada.
+
+Para calcularlo, se obtuvo la amplitud de la STFT en cada frecuencia y se normalizaron temporalmente los ciclos al 0--100\,\%. Luego, se calculó el coeficiente de Fourier correspondiente al segundo armónico y se promedió entre ciclos, normalizándolo por la desviación estándar de la amplitud espectral. El módulo del resultado constituye el GPM: valores elevados indican una modulación periódica más intensa y consistente entre ciclos.
+
+El análisis se realizó sobre seis canales y 33 frecuencias, totalizando 198 comparaciones por velocidad. Para evaluar la significancia estadística se implementó una prueba no paramétrica de 10.000 permutaciones mediante desplazamientos circulares independientes de los ciclos. Se aplicó la corrección \textit{max-T} para controlar la tasa de error familiar (FWER) al 5\,\%, considerando significativos los valores de $p<0{,}05$ corregidos.
+
+\subsection{Modelado biomecánico mediante OpenSim}
+
+Se utilizó OpenSim, un entorno de simulación musculoesquelética, mediante su API de Python. Se empleó el modelo \textit{gait2392}, personalizado a partir de las medidas antropométricas de cada sujeto disponibles en el archivo \texttt{subject-info.csv}.
+
+La frecuencia de zancada se estimó mediante el método de Welch aplicado a la PSD de la fuerza vertical. Para generar el movimiento se utilizó una plantilla cinemática de referencia, cuyos períodos de apoyo y balanceo se ajustaron temporalmente a los contactos y despegues detectados en las plataformas.
+
+A partir de esta información se generaron archivos \texttt{.mot}, que fueron procesados mediante la herramienta \textit{AnalyzeTool} de OpenSim, utilizando los análisis \textit{Kinematics} y \textit{BodyKinematics} para obtener las trayectorias articulares y el movimiento del modelo.
+
+\subsection{Comparación con los registros IMU}
+
+La cinemática obtenida mediante OpenSim se contrastó con las mediciones experimentales de los IMU Xsens. Como ambos registros no se encontraban sincronizados directamente, se estimó primero el desfase temporal mediante la correspondencia de las duraciones de zancada y posteriormente se refinó mediante correlación cruzada de las señales de rodilla.
+
+Se compararon los ángulos de cadera, rodilla y tobillo de ambas piernas, normalizando los ciclos al 0--100\,\%. La correspondencia se cuantificó mediante el coeficiente de correlación de Pearson ($r$), el error cuadrático medio (RMSE) y el sesgo. También se compararon la frecuencia de zancada, los tiempos de apoyo y los errores temporales en la detección de contactos.
+
+\subsection{Interfaz gráfica}
+
+Se desarrolló una interfaz gráfica denominada \textit{EEGait} mediante PySide6, que permite ejecutar el procesamiento sin interactuar directamente con el código. El usuario puede seleccionar el sujeto y las velocidades disponibles, configurar los parámetros de filtrado, segmentación y control de calidad, e incluir opcionalmente la simulación en OpenSim.
+
+La aplicación ofrece dos modalidades de análisis estadístico: rápida (500 permutaciones) y completa (10.000 permutaciones). Al ejecutar el procesamiento, muestra una barra de progreso y organiza los resultados en pestañas con gráficos y registros de ejecución. Finalmente, permite exportar los resultados a PDF y acceder a la visualización del modelo en OpenSim.
 
 \section{Resultados}
 
