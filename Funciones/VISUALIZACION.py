@@ -7,7 +7,7 @@ import mne
 import matplotlib.pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
 from scipy.signal import freqz
-from .FEATURES import FS_FP, FASES, COLORES_FASES, COLORES_BANDAS, BANDAS as BANDAS_STFT
+from .Features import FS_FP, FASES, COLORES_FASES, COLORES_BANDAS, BANDAS as BANDAS_STFT
 
 COLORES_VELOCIDAD = ["tab:blue", "tab:red", "black"]
 BANDAS = {

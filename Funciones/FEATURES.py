@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import stft
 from scipy.interpolate import interp1d
-from .VALIDACION import FS_FP, FASES, COLORES_FASES
+from .Acondicionamiento import FS_FP, FASES, COLORES_FASES
 
 BANDAS = {
     "Mu (8-13 Hz)": (8, 13),
@@ -927,4 +927,3 @@ def analizar_gpm_permutaciones(
         figuras.append(fig)
 
     return resultados, figuras
-
