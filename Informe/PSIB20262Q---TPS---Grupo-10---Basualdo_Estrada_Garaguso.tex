@@ -145,8 +145,11 @@ Firma y Fecha & \\ \hline
 
 % =============================================================================
 % INFORME
-% El cuerpo principal debe ocupar entre 2 y 4 carillas, sin contar carátula,
-% índice, anexo ni bibliografía.
+% =============================================================================
+
+
+% El cuerpo principal no debe superar las 8 páginas, sin contar carátula ni
+% referencias. El anexo es opcional y no debe superar las 4 páginas.
 % =============================================================================
 
 
@@ -160,7 +163,7 @@ La marcha humana es un movimiento cíclico que requiere la coordinación del sis
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.4\textwidth]{Imagenes/CortezaMotora.png}
+    \includegraphics[width=0.3\textwidth]{Imagenes/CortezaMotora.png}
     \caption{Áreas corticales involucradas en el control motor.}
 \end{figure}
 
@@ -169,26 +172,23 @@ La marcha humana es un movimiento cíclico que requiere la coordinación del sis
 
 La electroencefalografía (EEG) es una técnica no invasiva que registra, mediante electrodos sobre el cuero cabelludo, variaciones de potencial eléctrico originadas principalmente por la actividad postsináptica sincronizada de poblaciones neuronales corticales. La disposición de los electrodos suele seguir el sistema internacional 10--20, que permite ubicar los canales respecto de distintas regiones cerebrales.
 
-En el estudio de la marcha resultan relevantes las oscilaciones sensoriomotoras de las bandas alfa/mu (8--13 Hz) y beta (13--30 Hz), cuya potencia puede disminuir durante la preparación y ejecución del movimiento, fenómeno denominado desincronización relacionada con eventos (ERD). Asimismo, la actividad gamma baja (24--40 Hz) puede presentar modulaciones periódicas asociadas al ciclo de marcha. Cabe destacar que las bandas beta y gamma baja se superponen entre 24 y 30 Hz, por lo que se analizan como intervalos espectrales parcialmente solapados y no como componentes independientes.
+En el estudio de la marcha resultan relevantes las oscilaciones sensoriomotoras de las bandas alfa/mu (8--13 Hz) y beta (13--30 Hz), cuya potencia puede disminuir durante la preparación y ejecución del movimiento, fenómeno denominado desincronización relacionada con eventos (ERD). Asimismo, la actividad gamma baja (24--40 Hz) puede presentar modulaciones periódicas asociadas al ciclo de marcha. Las bandas beta y gamma baja se superponen entre 24 y 30 Hz, por lo que se analizan como intervalos parcialmente solapados. El análisis tiempo-frecuencia permite estudiar estas bandas a lo largo de las fases de la locomoción, considerando los artefactos de movimiento y musculares presentes en el EEG.
 
-Por ello, el análisis tiempo-frecuencia permite estudiar la evolución de estas bandas y su relación con las distintas fases de la locomoción, considerando los posibles artefactos de movimiento y actividad muscular presentes en el EEG.
 
 
 \subsection{Estado del arte}
 
-El análisis de la marcha resulta fundamental para comprender el control motor y estudiar alteraciones asociadas a enfermedades neurológicas y musculoesqueléticas. Sin embargo, Katmah y colaboradores señalan que muchos conjuntos de datos estudian de forma aislada la actividad cerebral, muscular o biomecánica, dificultando el análisis de sus interacciones.
-
-Para abordar esta limitación, los investigadores de la Universidad Khalifa desarrollaron el conjunto de datos \textit{A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults}, con registros sincronizados de 59 adultos sanos ($24\pm5$ años), caminando a velocidades de 0,5; 0,75 y 1,0 m/s. Incluye 19 canales de EEG (300 Hz), 12 canales de EMG, 17 sensores IMU (60 Hz) y mediciones de fuerzas de reacción del suelo. La integración temporal de estas señales permite relacionar la actividad cortical con la activación muscular y los eventos biomecánicos de la marcha, proporcionando una base para desarrollar y validar algoritmos de clasificación.
+Katmah y colaboradores señalan que muchos conjuntos de datos de marcha estudian de forma aislada la actividad cerebral, muscular o biomecánica, dificultando el análisis de sus interacciones. Para abordar esta limitación, los investigadores de la Universidad Khalifa desarrollaron el conjunto de datos \textit{A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults}, con registros sincronizados de 59 adultos sanos ($24\pm5$ años), caminando a velocidades de 0,5; 0,75 y 1,0 m/s. Incluye 19 canales de EEG (300 Hz), 12 canales de EMG, 17 sensores IMU (60 Hz) y mediciones de fuerzas de reacción del suelo. Su registro sincronizado permite desarrollar y validar algoritmos que relacionen la actividad cortical con los eventos de la marcha.
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}{0.45\textwidth}
+    \begin{subfigure}{0.34\textwidth}
         \centering
         \includegraphics[width=\linewidth]{Imagenes/Sistema 10-20.png}
         \caption{Distribución de electrodos.}
         \label{fig:subim1}
-    \end{subfigure}\hfill
-    \begin{subfigure}{0.45\textwidth}
+    \end{subfigure}\hspace{1cm}
+    \begin{subfigure}{0.34\textwidth}
         \centering
         \includegraphics[width=\linewidth]{Imagenes/Setup.png}
         \caption{Configuración experimental.}
@@ -198,104 +198,335 @@ Para abordar esta limitación, los investigadores de la Universidad Khalifa desa
     \label{fig:imagenes_juntas}
 \end{figure}
 
-Para el presente trabajo se seleccionaron seis canales de EEG: C3, Cz y C4, sobre regiones centrales vinculadas con la actividad sensoriomotora, y P3, Pz y P4, sobre regiones parietales asociadas a la integración sensorial. Esta selección concentra el análisis en áreas de interés para el control de la marcha.
 
-Lorach y colaboradores (2023), en \textit{Walking naturally after spinal cord injury using a brain--spine interface}, demostraron una aplicación de la decodificación de señales corticales mediante una interfaz cerebro--médula espinal invasiva, capaz de vincular la actividad cerebral con estimulación medular para facilitar la marcha. Si bien su tecnología difiere del EEG de superficie empleado aquí, constituye un antecedente del potencial de las interfaces neuronales en neurorrehabilitación.
+Lorach y colaboradores (2023), en \textit{Walking naturally after spinal cord injury using a brain--spine interface}, demostraron una aplicación de la decodificación de señales corticales mediante una interfaz cerebro--médula espinal invasiva que vincula la actividad cerebral con estimulación medular para restablecer la marcha, un antecedente del potencial de estas interfaces en neurorrehabilitación.
 
-Seeber y colaboradores (2014), en \textit{EEG beta suppression and low gamma modulation are different elements of human upright walking}, estudiaron EEG de alta densidad durante la marcha y observaron una disminución de potencia en las bandas mu y beta, junto con una modulación periódica de gamma baja (24--40 Hz) asociada al ciclo. Para cuantificarla utilizaron el índice \textit{Gait Phase Modulation} (GPM), que considera dos períodos de modulación por ciclo completo. Este resultado motiva el análisis tiempo-frecuencia de las bandas mu, beta y gamma baja en los seis canales seleccionados, teniendo en cuenta las limitaciones espaciales y los posibles artefactos del EEG de superficie.
+Con EEG de superficie, Presacco y colaboradores (2011) decodificaron la cinemática de cadera, rodilla y tobillo durante la marcha en cinta a partir de 60 canales, mediante decodificadores lineales entrenados con validación cruzada. Ese enfoque requiere una etapa de entrenamiento supervisado con registros cinemáticos de cada sujeto. En el presente trabajo, por restricción de la cátedra, no se utilizan técnicas de aprendizaje automático: los eventos se obtienen directamente de la fase del EEG, con una calibración de 20 s.
+
+Seeber y colaboradores (2014), en \textit{EEG beta suppression and low gamma modulation are different elements of human upright walking}, estudiaron EEG de alta densidad durante la marcha y observaron una disminución de potencia en las bandas mu y beta, junto con una modulación periódica de gamma baja (24--40 Hz) asociada al ciclo. Para cuantificarla utilizaron el índice \textit{Gait Phase Modulation} (GPM), que considera dos períodos de modulación por ciclo completo. Este resultado motiva el análisis tiempo-frecuencia de las bandas mu, beta y gamma baja en los seis canales seleccionados.
+
+Por último, Castermans y colaboradores (2014) mostraron que parte de las oscilaciones de baja frecuencia (delta baja) y de gamma alta observadas en el EEG durante la marcha en cinta no tienen origen cortical, sino que se deben a artefactos mecánicos sincronizados con los pasos. Por ese motivo, en este trabajo la decodificación se realiza en dos versiones: una de baja frecuencia, que incluye ese artefacto, y otra basada en las envolventes de mu, beta y gamma baja, más cercana a la actividad cortical.
 
 
 \subsection{Objetivos}
 
-El objetivo es desarrollar un algoritmo que analice señales de EEG para identificar y clasificar las fases de apoyo y balanceo de la marcha humana. Para ello, se extraerán características temporales y espectrales del EEG y se integrarán las fases estimadas en OpenSim para simular el movimiento. A partir de esta simulación, se obtendrán señales de sensores inerciales (IMU) simulados, que serán contrastadas con los registros experimentales de IMU del conjunto de datos para evaluar la correspondencia entre el movimiento simulado y el real.
+\textbf{Objetivo general.} Desarrollar un algoritmo, sin técnicas de aprendizaje automático, que analice señales de EEG para identificar y clasificar las fases de apoyo y balanceo de la marcha humana, y simular el movimiento resultante en OpenSim para contrastarlo con registros reales de sensores inerciales.
+
+\textbf{Objetivos específicos.}
+\begin{itemize}
+    \setlength{\itemsep}{0pt}
+    \item Acondicionar el EEG mediante re-referenciación y filtros digitales, y segmentarlo en ciclos de marcha a partir de las plataformas de fuerza, descartando ciclos con artefactos.
+    \item Caracterizar la modulación de las bandas mu, beta y gamma baja a lo largo del ciclo mediante STFT y el índice GPM, con una prueba estadística corregida por comparaciones múltiples.
+    \item Decodificar los contactos y despegues de cada pie a partir de la fase instantánea del EEG y clasificar cada instante en apoyo o balanceo y en cuatro fases de marcha.
+    \item Generar el movimiento (\texttt{.mot}) de un modelo musculoesquelético escalado al sujeto a partir de los eventos decodificados y obtener señales de IMU simulados en OpenSim.
+    \item Comparar la cinemática y las velocidades angulares simuladas con las medidas por los IMU del conjunto de datos.
+\end{itemize}
 
 
 \section{Materiales y Métodos}
 
-Se desarrolló un programa en Python para procesar señales de EEG, identificar eventos de marcha y realizar un análisis biomecánico mediante OpenSim. Se utilizaron las bibliotecas MNE, NumPy y SciPy para el procesamiento de señales, Matplotlib para la visualización y PySide6 para la interfaz gráfica.
+Se desarrolló un programa en Python con las bibliotecas MNE, NumPy, SciPy y Pandas para el procesamiento de señales, Matplotlib para la visualización y PySide6 para la interfaz gráfica. El código se organizó en módulos, uno por etapa del procesamiento; el contenido de cada archivo \texttt{.py} se detalla en la Tabla~\ref{tab:archivos} del Anexo.
 
 \subsection{Datos utilizados}
 
-Se empleó el conjunto de datos multimodal de Katmah y colaboradores, utilizando registros correspondientes a caminatas de 0,5; 0,75 y 1,0 m/s. Se seleccionaron seis canales de EEG (C3, Cz, C4, P3, Pz y P4), muestreados a 300 Hz. Adicionalmente, se utilizaron plataformas de fuerza bilaterales (1000 Hz) para identificar las fases de marcha y registros cinemáticos de sensores IMU Xsens (60 Hz) para la comparación con OpenSim.
+Se emplearon los registros del sujeto S10 (hombre, 1,70 m, 78,1 kg) del conjunto de datos de Katmah y colaboradores, correspondientes a caminatas en cinta de 0,5; 0,75 y 1,0 m/s de aproximadamente 60 s cada una. El EEG se adquirió con 19 electrodos según el sistema 10--20, a 300 Hz, con Pz como referencia. Para el análisis espectral se seleccionaron seis canales: C3, Cz y C4, sobre regiones centrales vinculadas con la actividad sensoriomotora, y P3, Pz y P4, sobre regiones parietales asociadas a la integración sensorial; para la decodificación de la marcha se agregaron F3, Fz y F4. Se utilizaron además las plataformas de fuerza bilaterales (1000 Hz), para identificar las fases de marcha y calibrar el decodificador, y los IMU Xsens (60 Hz) ---ángulos articulares, posiciones y velocidades angulares de los segmentos---, para validar la simulación.
 
 \subsection{Preprocesamiento del EEG}
 
-Inicialmente, se reconstruyó el canal Pz, utilizado como referencia durante la adquisición, y se realizó una rereferenciación respecto del promedio de los electrodos auriculares A1 y A2.
+Se reconstruyó el canal Pz y se re-referenció el EEG respecto del promedio de los electrodos auriculares A1 y A2. Luego se aplicaron dos filtros FIR de fase lineal diseñados con ventana de Hamming: un pasaaltos de 1 Hz y 991 coeficientes, para atenuar la deriva de línea de base, y un pasabajos de 45 Hz y 199 coeficientes, para reducir las componentes de alta frecuencia. Ambos se aplicaron con \textit{filtfilt}, obteniendo una respuesta de fase cero.
 
-Posteriormente, se implementó un filtrado pasabanda mediante dos filtros FIR de fase lineal diseñados con ventana de Hamming: un pasaaltos de 1 Hz y 991 coeficientes para atenuar la deriva de línea de base, y un pasabajos de 45 Hz y 199 coeficientes para reducir las componentes de alta frecuencia. Ambos filtros se aplicaron mediante el método de filtrado bidireccional \textit{filtfilt}, obteniendo una respuesta de fase cero y evitando retardos temporales.
+Como alternativa al método de ventanas se evaluó el diseño óptimo en el sentido minimax (equirriple) mediante el algoritmo de Parks--McClellan, que minimiza el máximo error ponderado respecto de la respuesta ideal. Con el mismo número de coeficientes y la misma banda de transición (42,5--47,5 Hz y 0,5--1,5 Hz), el diseño óptimo alcanzó una atenuación mínima en la banda de rechazo de 70 y 74 dB, frente a 52 dB con ventana de Hamming, con un rizado en la banda de paso similar (0,02--0,03 dB). Dado que ambos diseños superan la atenuación requerida, se conservaron los filtros con ventana de Hamming, cuyos lóbulos en la banda de rechazo decrecen con la frecuencia. El efecto del filtrado se evaluó comparando la PSD de Welch (segmentos de 2 s, ventana de Hamming, 50\,\% de solapamiento) antes y después de cada filtro.
 
-Para evaluar el efecto del filtrado, se estimó la densidad espectral de potencia (PSD) mediante el método de Welch, utilizando segmentos de 2 s, ventana de Hamming y un solapamiento del 50\,\%, comparando los espectros antes y después de cada etapa de filtrado.
+\subsection{Detección de eventos, segmentación y control de calidad}
 
-\subsection{Detección de eventos y segmentación}
+Se utilizó la fuerza vertical ($F_z$) de ambas plataformas, previa corrección de su \textit{offset} mediante una estimación robusta basada en el percentil 20 y la mediana de las muestras de menor amplitud. Los contactos y despegues se identificaron con un umbral de 30 N, suprimiendo transiciones menores a 100 ms, y a partir de los estados de apoyo de ambos pies se etiquetaron cuatro fases: doble apoyo inicial, apoyo simple, doble apoyo final y balanceo.
 
-Para detectar los eventos de marcha se utilizó la fuerza vertical ($F_z$) de ambas plataformas. En primer lugar, se corrigió su \textit{offset} mediante una estimación robusta basada en el percentil 20 y la mediana de las muestras de menor amplitud.
+Las etiquetas se trasladaron al EEG por correspondencia temporal entre muestras (300 y 1000 Hz, desfase asumido de 0 s). Los registros se segmentaron en ciclos delimitados por contactos consecutivos del pie derecho, desde el segundo ciclo completo; se descartaron los ciclos cuya duración difería más de un 30\,\% de la mediana y los restantes se normalizaron temporalmente. Para detectar artefactos se calcularon, por canal, la amplitud pico a pico, el RMS centrado en la mediana y la máxima diferencia entre muestras consecutivas, y se excluyó un ciclo cuando al menos dos indicadores superaban 3,5 desviaciones absolutas medianas (MAD) o uno superaba 7.
 
-Los contactos y despegues se identificaron mediante un método de detección por umbral de 30 N, suprimiendo transiciones espurias inferiores a 100 ms. A partir de los estados de apoyo de ambos pies, se realizó un etiquetado temporal de cuatro fases: doble apoyo inicial, apoyo simple, doble apoyo final y balanceo.
+\subsection{Análisis tiempo-frecuencia e índice GPM}
 
-Posteriormente, las etiquetas se trasladaron al EEG mediante correspondencia temporal entre muestras, considerando las frecuencias de adquisición de 300 y 1000 Hz y un desfase asumido de 0 s. Se segmentaron los registros en ciclos delimitados por contactos consecutivos del pie derecho, comenzando desde el segundo ciclo completo. Se descartaron aquellos cuya duración difiriera más de un 30\,\% respecto de la mediana, y se normalizaron temporalmente para permitir su comparación.
+Se aplicó la STFT sobre las señales continuas filtradas, con ventanas Hann de 0,5 s y 90\,\% de solapamiento, entre 8 y 40 Hz cada 1 Hz. La potencia se normalizó respecto de su media durante la marcha, y los mapas de los ciclos válidos se normalizaron al 0--100\,\% del ciclo y se promediaron, evaluando las bandas mu, beta y gamma baja en cada fase.
 
-\subsection{Control de calidad}
+Siguiendo a Seeber y colaboradores (2014), se calculó el índice GPM, que cuantifica la intensidad y consistencia de la modulación de la amplitud espectral a lo largo del ciclo. Como cada ciclo incluye un paso de cada pierna, se tomó el coeficiente de Fourier del segundo armónico de la amplitud de la STFT, promediado entre ciclos y normalizado por la desviación estándar de la amplitud; su módulo constituye el GPM. Sobre seis canales y 33 frecuencias (198 pruebas por velocidad) se aplicó una prueba de permutaciones mediante desplazamientos circulares independientes de los ciclos (500 permutaciones en el modo rápido y 10.000 en el completo), con corrección \textit{max-T} para controlar la tasa de error familiar al 5\,\%.
 
-Para detectar ciclos con posibles artefactos se implementó un método de detección robusta de valores atípicos basado en la desviación absoluta mediana (MAD). Se calcularon tres indicadores por canal: amplitud pico a pico, valor RMS centrado respecto de la mediana y máxima diferencia entre muestras consecutivas.
+\subsection{Decodificación de la marcha a partir del EEG}
 
-Se consideró sospechoso un ciclo cuando al menos dos indicadores superaban 3,5 desviaciones robustas o uno superaba 7. Los ciclos identificados se excluyeron del análisis posterior, siempre que permaneciera una cantidad suficiente de ciclos válidos.
+Los eventos se obtuvieron exclusivamente mediante procesamiento de señales, sin aprendizaje automático. La frecuencia de zancada se estimó como el pico de la PSD de Welch del EEG entre 0,4 y 3 Hz en C3, Cz y C4. Se construyeron dos versiones de la señal de cada canal: una de baja frecuencia (0,3--4 Hz), que incluye el artefacto de movimiento de cada paso, y una cortical, formada por la suma de las envolventes de Hilbert normalizadas de mu, beta y gamma baja, suavizadas a 4 Hz y en escala logarítmica.
 
-\subsection{Análisis tiempo-frecuencia}
+Cada señal se filtró en una banda angosta alrededor de la frecuencia de zancada ($\pm$20\,\%), obteniendo una oscilación casi sinusoidal con un ciclo por zancada, cuya fase instantánea se calculó con la transformada de Hilbert. En los primeros 20 s se determinó, mediante un promedio circular, la fase media del EEG en cada evento (contacto y despegue de cada pie) según las plataformas, y se eligió el canal con mayor \textit{phase locking value} (PLV). En el resto del registro se marcó un evento cada vez que la fase pasaba por el ángulo calibrado; las plataformas solo se usaron en la calibración.
 
-Se utilizó la transformada de Fourier de tiempo corto (STFT) para caracterizar la evolución espectral del EEG durante la marcha. Se aplicó sobre las señales continuas filtradas mediante ventanas Hann de 0,5 s, con un solapamiento del 90\,\%, analizando frecuencias entre 8 y 40 Hz con una grilla de 1 Hz.
+El desempeño se evaluó después de la calibración mediante la sensibilidad, el error absoluto mediano y la correlación de fase respecto de las plataformas, y mediante el porcentaje de muestras clasificadas igual que las plataformas en apoyo/balanceo y en las cuatro fases. Como control se usó un ``metrónomo'': una oscilación ideal con el período y los ángulos de la calibración, sin EEG. Además, se calculó el PLV de cada banda por separado.
 
-La potencia espectral se calculó como el módulo cuadrado de la STFT y se normalizó respecto de la potencia media durante la marcha, expresando las variaciones porcentuales. Los mapas correspondientes a los ciclos válidos se normalizaron al 0--100\,\% del ciclo y se promediaron.
+\subsection{Modelado en OpenSim y comparación con los IMU}
 
-Se analizaron las bandas mu (8--13 Hz), beta (13--30 Hz) y gamma baja (24--40 Hz), evaluando sus variaciones temporales y las diferencias descriptivas entre fases de marcha.
+Se utilizó la API de Python de OpenSim (Delp et al., 2007) con el modelo \textit{gait2392}, escalado con las medidas de \texttt{subject-info.csv} (altura, masa y longitudes del miembro inferior, el muslo, la pierna y el pie). Como estas medidas no usan los mismos reparos anatómicos que el modelo, cada segmento se escaló según la altura y se corrigió según cuánto se apartaba el sujeto de la proporción media de la muestra. El movimiento se generó a partir de una plantilla cinemática de OpenSim normalizada por fase, cuyos períodos de apoyo y balanceo se ajustaron, ciclo a ciclo, a los eventos decodificados del EEG. El \texttt{.mot} resultante se procesó con \textit{AnalyzeTool} (análisis \textit{Kinematics} y \textit{BodyKinematics}) para obtener los ángulos articulares y la posición y velocidad de cada segmento.
 
-\subsection{Índice GPM y análisis estadístico}
-
-Siguiendo la metodología de Seeber y colaboradores (2014), se calculó el índice \textit{Gait Phase Modulation} (GPM), que permite cuantificar qué tan intensa y consistente es la modulación de la amplitud espectral del EEG a lo largo del ciclo de marcha. Dado que un ciclo completo incluye un paso de cada pierna, se estudió el segundo armónico, correspondiente a dos períodos de modulación por zancada.
-
-Para calcularlo, se obtuvo la amplitud de la STFT en cada frecuencia y se normalizaron temporalmente los ciclos al 0--100\,\%. Luego, se calculó el coeficiente de Fourier correspondiente al segundo armónico y se promedió entre ciclos, normalizándolo por la desviación estándar de la amplitud espectral. El módulo del resultado constituye el GPM: valores elevados indican una modulación periódica más intensa y consistente entre ciclos.
-
-El análisis se realizó sobre seis canales y 33 frecuencias, totalizando 198 comparaciones por velocidad. Para evaluar la significancia estadística se implementó una prueba no paramétrica de 10.000 permutaciones mediante desplazamientos circulares independientes de los ciclos. Se aplicó la corrección \textit{max-T} para controlar la tasa de error familiar (FWER) al 5\,\%, considerando significativos los valores de $p<0{,}05$ corregidos.
-
-\subsection{Modelado biomecánico mediante OpenSim}
-
-Se utilizó OpenSim, un entorno de simulación musculoesquelética, mediante su API de Python. Se empleó el modelo \textit{gait2392}, personalizado a partir de las medidas antropométricas de cada sujeto disponibles en el archivo \texttt{subject-info.csv}.
-
-La frecuencia de zancada se estimó mediante el método de Welch aplicado a la PSD de la fuerza vertical. Para generar el movimiento se utilizó una plantilla cinemática de referencia, cuyos períodos de apoyo y balanceo se ajustaron temporalmente a los contactos y despegues detectados en las plataformas.
-
-A partir de esta información se generaron archivos \texttt{.mot}, que fueron procesados mediante la herramienta \textit{AnalyzeTool} de OpenSim, utilizando los análisis \textit{Kinematics} y \textit{BodyKinematics} para obtener las trayectorias articulares y el movimiento del modelo.
-
-\subsection{Comparación con los registros IMU}
-
-La cinemática obtenida mediante OpenSim se contrastó con las mediciones experimentales de los IMU Xsens. Como ambos registros no se encontraban sincronizados directamente, se estimó primero el desfase temporal mediante la correspondencia de las duraciones de zancada y posteriormente se refinó mediante correlación cruzada de las señales de rodilla.
-
-Se compararon los ángulos de cadera, rodilla y tobillo de ambas piernas, normalizando los ciclos al 0--100\,\%. La correspondencia se cuantificó mediante el coeficiente de correlación de Pearson ($r$), el error cuadrático medio (RMSE) y el sesgo. También se compararon la frecuencia de zancada, los tiempos de apoyo y los errores temporales en la detección de contactos.
+Como la cinta y los IMU no estaban sincronizados por hardware, el desfase se estimó comparando los contactos de las plataformas con los de los IMU, obtenidos con el método de Zeni et al. (2008). Se compararon los ángulos de cadera, rodilla y tobillo y, como IMU simulados, la velocidad angular sagital de muslo, pierna y pie frente a la de los giroscopios, mediante la correlación de Pearson ($r$) entre ciclos promedio, el RMSE, el sesgo y la correlación de la señal continua, que evalúa la coincidencia paso a paso. También se compararon la duración del ciclo, el porcentaje de apoyo y el error de los contactos.
 
 \subsection{Interfaz gráfica}
 
-Se desarrolló una interfaz gráfica denominada \textit{EEGait} mediante PySide6, que permite ejecutar el procesamiento sin interactuar directamente con el código. El usuario puede seleccionar el sujeto y las velocidades disponibles, configurar los parámetros de filtrado, segmentación y control de calidad, e incluir opcionalmente la simulación en OpenSim.
+Se desarrolló la interfaz \textit{EEGait} con PySide6, que permite elegir el sujeto y las velocidades, configurar los parámetros de filtrado, segmentación y control de calidad, elegir entre un análisis estadístico rápido (500 permutaciones) o completo (10.000) e incluir la simulación en OpenSim. Los resultados se organizan en pestañas con gráficos y registros, y pueden exportarse a PDF.
 
-La aplicación ofrece dos modalidades de análisis estadístico: rápida (500 permutaciones) y completa (10.000 permutaciones). Al ejecutar el procesamiento, muestra una barra de progreso y organiza los resultados en pestañas con gráficos y registros de ejecución. Finalmente, permite exportar los resultados a PDF y acceder a la visualización del modelo en OpenSim.
 
 \section{Resultados}
 
+\subsection{Acondicionamiento y segmentación}
+
+Luego del filtrado, la banda de 1--4 Hz concentró entre el 63 y el 72\,\% de la potencia total entre 1 y 40 Hz, mientras que mu y beta representaron cada una entre el 7 y el 10\,\%. Esta concentración de potencia en baja frecuencia es compatible con la presencia de artefactos de movimiento sincronizados con los pasos.
+
+La plataforma derecha presentó un \textit{offset} de entre $-37$ y $-45$ N, mientras que en la izquierda fue menor a 2 N, lo que justificó su corrección previa a la umbralización. La Tabla~\ref{tab:marcha} resume los parámetros de marcha obtenidos de las plataformas: al aumentar la velocidad disminuyeron la duración del ciclo, el porcentaje de apoyo y la duración de los dobles apoyos, mientras que aumentó el apoyo simple.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccccccc}
+\toprule
+Velocidad & Ciclo (s) & Apoyo (\%) & DA inicial & Apoyo simple & DA final & Ciclos & Válidos \\
+\midrule
+0,5 m/s  & 1,78 & 68--70 & 17,1\,\% & 30,2\,\% & 20,6\,\% & 31 & 28 \\
+0,75 m/s & 1,38 & 64--66 & 13,5\,\% & 33,8\,\% & 17,0\,\% & 40 & 35 \\
+1 m/s    & 1,21 & 63--64 & 11,6\,\% & 36,3\,\% & 15,1\,\% & 46 & 35 \\
+\bottomrule
+\end{tabular}
+
+\vspace{1mm}
+{\footnotesize DA: doble apoyo. Ciclos: ciclos segmentados tras el descarte por duración. Válidos: ciclos que superaron el control de calidad.}
+\caption{Parámetros de marcha según las plataformas de fuerza y ciclos de EEG utilizados.}
+\label{tab:marcha}
+\end{table}
+
+El control de calidad rechazó 3, 5 y 11 ciclos a 0,5; 0,75 y 1 m/s, respectivamente. La mayoría de los rechazos se debió a saltos abruptos entre muestras en C4 y P4 (con desviaciones robustas de hasta $z=19{,}5$), compatibles con artefactos.
+
+\subsection{Análisis tiempo-frecuencia}
+
+En los canales centrales la potencia de mu y beta varió de forma sistemática a lo largo del ciclo, con cambios mayores que en los parietales. En C3, a 0,5 m/s, la potencia de mu y beta disminuyó entre un 66 y un 74\,\% respecto de la media durante el apoyo simple y el balanceo, y aumentó durante el doble apoyo final. A 1 m/s la disminución se concentró en el doble apoyo inicial (entre $-74$ y $-84$\,\%) y el aumento en el balanceo (cerca de $+70$\,\%). En los canales parietales las diferencias entre fases fueron menores y con una dispersión entre ciclos mayor que el propio efecto.
+
+\subsection{Índice GPM}
+
+El número de pruebas significativas, sobre 198 por velocidad, aumentó con la velocidad: 76 a 0,5 m/s, 92 a 0,75 m/s y 104 a 1 m/s (500 permutaciones, FWER 5\,\%). La Tabla~\ref{tab:gpm} muestra el máximo GPM por banda. Mu y beta resultaron significativas en los tres canales centrales a todas las velocidades, y en los parietales con mayor frecuencia al aumentar la velocidad. La gamma baja fue significativa únicamente en C3 y Cz.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Velocidad & Mu (8--13 Hz) & Beta (13--30 Hz) & Gamma baja (24--40 Hz) \\
+\midrule
+0,5 m/s  & 0,66 (C3, 12 Hz) & 0,67 (C3, 18 Hz) & 0,56 (C3, 26 Hz) \\
+0,75 m/s & 0,63 (Cz, 12 Hz) & 0,67 (Cz, 15 Hz) & 0,59 (Cz, 32 Hz) \\
+1 m/s    & 0,77 (C3, 8 Hz)  & 0,75 (C3, 15 Hz) & 0,63 (C3, 28 Hz) \\
+\bottomrule
+\end{tabular}
+
+\vspace{1mm}
+{\footnotesize Umbral \textit{max-T} (95\,\%): 0,28; 0,26 y 0,29. Todos los valores de la tabla tienen $p<0{,}01$ corregido.}
+\caption{Máximo GPM por banda en los canales centrales (canal y frecuencia del máximo).}
+\label{tab:gpm}
+\end{table}
+
+\subsection{Decodificación de la marcha a partir del EEG}
+
+El pico de la PSD del EEG coincidió con la frecuencia de zancada de las plataformas (0,565; 0,725 y 0,83 Hz); a 1 m/s, en Cz y C4 apareció en el segundo armónico.
+
+La Tabla~\ref{tab:decod} resume el desempeño luego de la calibración. El canal elegido fue C3 en todos los casos, salvo la versión de baja frecuencia a 0,5 m/s (C4). La versión de baja frecuencia detectó entre el 95 y el 100\,\% de los eventos con un error mediano de 26 a 72 ms; la versión cortical, entre el 90 y el 100\,\% con un error de 43 a 99 ms. El metrónomo, en cambio, perdió la sincronía: a 0,75 m/s su error mediano superó los 228 ms y su correlación de fase fue prácticamente nula.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+Velocidad & Versión & Sensibilidad (\%) & $|$Error$|$ mediano (ms) & $r$ de fase \\
+\midrule
+0,5 m/s  & Baja      & 95--100 & 48--72  & 0,93--0,97 \\
+         & Cortical  & 90--95  & 68--99  & 0,90--0,92 \\
+         & Metrónomo & 30--33  & 32--85  & $-0{,}09$--$-0{,}06$ \\
+\midrule
+0,75 m/s & Baja      & 100     & 29--41  & 0,97--0,98 \\
+         & Cortical  & 100     & 43--50  & 0,92--0,93 \\
+         & Metrónomo & 48--50  & 228--234 & $-0{,}02$--0,01 \\
+\midrule
+1 m/s    & Baja      & 100     & 26--42  & 0,96--0,97 \\
+         & Cortical  & 97--100 & 50--72  & 0,86--0,91 \\
+         & Metrónomo & 87--94  & 92--122 & 0,63--0,67 \\
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+\caption{Detección de contactos y despegues tras la calibración (rango sobre los cuatro eventos).}
+\label{tab:decod}
+\end{table}
+
+Al dividir el registro en dos mitades, el error del EEG se mantuvo por debajo de 100 ms en ambas (baja: 18--64 ms; cortical: 43--93 ms), mientras que el del metrónomo creció de 229 a 392 ms a 0,75 m/s y de 45 a 190 ms a 1 m/s; a 0,5 m/s el metrónomo no logró emparejar eventos en la segunda mitad.
+
+La Tabla~\ref{tab:clasif} muestra la clasificación de cada muestra. La versión de baja frecuencia coincidió con las plataformas en el 92--95\,\% de las muestras para apoyo/balanceo y en el 86--89\,\% para las cuatro fases; la versión cortical, en el 88--91\,\% y el 78--81\,\%, respectivamente. En la versión cortical, a 0,75 y 1 m/s el PLV de mu (0,95 y 0,97) fue mayor que el de beta (0,93 y 0,87) y el de gamma baja (0,88 y 0,83); a 0,5 m/s las tres bandas fueron similares (0,89--0,90).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{Apoyo/balanceo (media de ambos pies)} & \multicolumn{3}{c}{Cuatro fases} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Velocidad & Baja & Cortical & Metrónomo & Baja & Cortical & Metrónomo \\
+\midrule
+0,5 m/s  & 93,0 & 88,7 & 57,4 & 86,0 & 77,5 & 29,0 \\
+0,75 m/s & 94,4 & 90,6 & 52,8 & 88,7 & 81,1 & 24,4 \\
+1 m/s    & 93,6 & 88,4 & 77,4 & 87,2 & 77,6 & 60,7 \\
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+\caption{Coincidencia con las plataformas en la clasificación de fases (\% de muestras).}
+\label{tab:clasif}
+\end{table}
+
+\subsection{Simulación en OpenSim y comparación con IMU}
+
+El modelo escalado tuvo factores de 0,94 para la altura, 1,02 para el muslo y 0,85 para la pierna, ya que la relación muslo/pierna del sujeto se apartó un 21\,\% de la media de la muestra. Los \texttt{.mot} generados desde el EEG reprodujeron la duración del ciclo medida por los IMU con diferencias menores a 0,02 s, y el error absoluto medio de los contactos respecto de los IMU fue de 29 a 61 ms para la versión de baja frecuencia y de 53 a 84 ms para la cortical. El porcentaje de apoyo de la simulación (62--71\,\%) coincidió con el de las plataformas, pero fue entre 6 y 8 puntos menor que el estimado por Zeni sobre los IMU.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{$r$ ciclo promedio} & \multicolumn{2}{c}{$r$ señal continua} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Señal & Baja & Cortical & Baja & Cortical \\
+\midrule
+Ángulos de cadera       & 0,91--0,95 & 0,91--0,94 & 0,84--0,92 & 0,77--0,85 \\
+Ángulos de rodilla      & 0,88--0,93 & 0,89--0,94 & 0,78--0,92 & 0,67--0,82 \\
+Ángulos de tobillo      & 0,77--0,93 & 0,81--0,92 & 0,67--0,92 & 0,56--0,74 \\
+Vel. angular de muslo   & 0,72--0,82 & 0,74--0,82 & 0,66--0,81 & 0,60--0,74 \\
+Vel. angular de pierna  & 0,83--0,95 & 0,84--0,95 & 0,70--0,93 & 0,58--0,79 \\
+Vel. angular de pie     & 0,75--0,90 & 0,79--0,89 & 0,59--0,90 & 0,46--0,71 \\
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+\caption{Correspondencia entre la simulación y los IMU (rango sobre ambas piernas y las tres velocidades).}
+\label{tab:imu}
+\end{table}
+
+La forma del ciclo promedio coincidió con la de los IMU en ambas versiones ($r$ entre 0,72 y 0,95; Tabla~\ref{tab:imu}). Los ángulos presentaron un sesgo de $-9$ a $-16^\circ$ en la cadera y de $+4$ a $+13^\circ$ en la rodilla; sin el sesgo, el RMSE fue de 3 a 11$^\circ$. La correlación de la señal continua, que depende de la ubicación temporal de cada paso, fue en general mayor para la versión de baja frecuencia, sobre todo a 0,5 y 0,75 m/s; a 1 m/s ambas versiones resultaron similares.
+
+
 \section{Conclusiones}
+
+El objetivo general se cumplió para el sujeto analizado. A partir del EEG y sin técnicas de aprendizaje automático, fue posible detectar contactos y despegues con errores del orden de 26 a 99 ms y clasificar apoyo y balanceo con una coincidencia del 88 al 95\,\% respecto de las plataformas. El movimiento simulado en OpenSim a partir de esos eventos reprodujo la cadencia y el patrón de los IMU, con correlaciones de hasta 0,95 en las velocidades angulares de los segmentos.
+
+La comparación con el metrónomo indica que el EEG no se limita a reproducir un ritmo fijo: sigue paso a paso las variaciones de la marcha, y su error no crece a lo largo del registro como el de una oscilación ideal. Sin embargo, la versión de mejor desempeño es la de baja frecuencia, que incluye el artefacto mecánico de cada paso descrito por Castermans y colaboradores (2014). La versión cortical, basada en las envolventes de mu, beta y gamma baja, obtuvo un desempeño algo menor pero aún alto, lo que muestra que la modulación de los ritmos sensoriomotores también contiene información sobre la fase de la marcha. Esto es consistente con el análisis GPM, que encontró una modulación significativa de mu y beta en los canales centrales y de gamma baja en C3 y Cz, en línea con lo reportado por Seeber y colaboradores (2014).
+
+A diferencia de Presacco y colaboradores (2011), que decodificaron la cinemática continua con 60 canales y decodificadores entrenados, el método propuesto usa nueve canales y no requiere entrenamiento, pero solo estima la temporización de los eventos: la forma de las curvas proviene de una plantilla, por lo que es la correlación continua, y no la del ciclo promedio, la que evalúa la decodificación.
+
+Las principales limitaciones son el análisis de un único sujeto, la calibración de 20 s con las plataformas, el uso de la transformada de Hilbert, que no es causal y impide el uso en tiempo real, y la falta de validación con EMG, reemplazada por los IMU. Como mejoras se proponen extender el análisis a los 59 sujetos, aplicar ICA para separar la actividad cortical del movimiento, comparar con registros en reposo, usar una estimación de fase causal y contrastar los eventos con el EMG.
 
 
 \section{Bibliografía}
 
+{\sloppy
 \begin{itemize}
-    \item Katmah, R., AlShehhi, A., Kosaji, D., Al-Rahmani, N., Abdullah, M., Hulleck, A. A., \& Khalaf, K. (s.f.). \textit{A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults}. Department of Biomedical Engineering \& Biotechnology, Khalifa University.
-    \item Lorach, H., Galvez, A., Spagnolo, V., Martel, F., Karakas, S., Intering, N., Vat, M., Faivre, O., Harte, C., Komi, S., Ravier, J., Collin, T., Coquoz, L., Sakr, I., Baaklini, E., Hernandez-Charpak, S. D., Dumont, G., Buschman, R., Buse, N., \dots\ Courtine, G. (2023). Walking naturally after spinal cord injury using a brain--spine interface. \textit{Nature}, \textit{618}(7963), 126--133. https://doi.org/10.1038/s41586-023-06094-5
-    \item Kandel, E. R., Schwartz, J. H., \& Jessell, T. M. (2001). Principios de neurociencia (4.ª ed.). McGraw-Hill Interamericana. https://archive.org/details/kandel-e.-r.-j.-h.-schwartz-y-t.-m.-jessell.-principios-de-neurociencia
+    \item Castermans, T., Duvinage, M., Cheron, G., \& Dutoit, T. (2014). About the cortical origin of the low-delta and high-gamma rhythms observed in EEG signals during treadmill walking. \textit{Neuroscience Letters}, \textit{561}, 166--170. \url{https://doi.org/10.1016/j.neulet.2013.12.059}
+    \item Delp, S. L., Anderson, F. C., Arnold, A. S., Loan, P., Habib, A., John, C. T., Guendelman, E., \& Thelen, D. G. (2007). OpenSim: open-source software to create and analyze dynamic simulations of movement. \textit{IEEE Transactions on Biomedical Engineering}, \textit{54}(11), 1940--1950. \url{https://doi.org/10.1109/TBME.2007.901024}
+    \item Kandel, E. R., Schwartz, J. H., \& Jessell, T. M. (2001). Principios de neurociencia (4.ª ed.). McGraw-Hill Interamericana. \url{https://archive.org/details/kandel-e.-r.-j.-h.-schwartz-y-t.-m.-jessell.-principios-de-neurociencia}
+    \item Katmah, R., AlShehhi, A., Kosaji, D., Al-Rahmani, N., Abdullah, M., Hulleck, A. A., \& Khalaf, K. (s.f.). \textit{A Multimodal Gait Dataset of Brain Activity, Muscle Activity, Kinematics and Ground Forces in Young Adults}. Department of Biomedical Engineering \& Biotechnology, Khalifa University. PhysioNet. \url{https://physionet.org/content/multimodal-gait-dataset/1.0.0/}
+    \item Lorach, H., Galvez, A., Spagnolo, V., Martel, F., Karakas, S., Intering, N., Vat, M., Faivre, O., Harte, C., Komi, S., Ravier, J., Collin, T., Coquoz, L., Sakr, I., Baaklini, E., Hernandez-Charpak, S. D., Dumont, G., Buschman, R., Buse, N., \dots\ Courtine, G. (2023). Walking naturally after spinal cord injury using a brain--spine interface. \textit{Nature}, \textit{618}(7963), 126--133. \url{https://doi.org/10.1038/s41586-023-06094-5}
+    \item McClellan, J. H., Parks, T. W., \& Rabiner, L. R. (1973). A computer program for designing optimum FIR linear phase digital filters. \textit{IEEE Transactions on Audio and Electroacoustics}, \textit{21}(6), 506--526. \url{https://doi.org/10.1109/TAU.1973.1162525}
+    \item Presacco, A., Goodman, R., Forrester, L., \& Contreras-Vidal, J. L. (2011). Neural decoding of treadmill walking from noninvasive electroencephalographic signals. \textit{Journal of Neurophysiology}, \textit{106}(4), 1875--1887. \url{https://doi.org/10.1152/jn.00104.2011}
     \item Seeber, M., Scherer, R., Wagner, J., Solis-Escalante, T., \& Müller-Putz, G. R. (2014). EEG beta suppression and low gamma modulation are different elements of human upright walking. \textit{Frontiers in Human Neuroscience}, \textit{8}, 485. \url{https://doi.org/10.3389/fnhum.2014.00485}
+    \item Zeni, J. A., Richards, J. G., \& Higginson, J. S. (2008). Two simple methods for determining gait events during treadmill and overground walking using kinematic data. \textit{Gait \& Posture}, \textit{27}(4), 710--714. \url{https://doi.org/10.1016/j.gaitpost.2007.07.007}
 \end{itemize}
-
+}
 
 
 \section{Anexo}
 
+\begin{table}[H]
+\centering
+\small
+\footnotesize
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{9.5cm}}
+\toprule
+Archivo & Contenido \\
+\midrule
+\texttt{main.py} & Ejecuta el procesamiento completo (etapas 1 a 8) por terminal o desde la interfaz, y exporta los resultados a PDF. \\
+\texttt{Funciones/Lectura.py} & Carga del EEG (\texttt{.edf}), de las plataformas de fuerza y del EMG (\texttt{.csv}); nombres, tipos y montaje 10--20 de los canales. \\
+\texttt{Funciones/Visualizacion.py} & Re-referenciación respecto de A1 y A2 y gráficos: EEG crudo, PSD, respuesta de los filtros, $F_z$, fases, ciclo promedio y mapas tiempo-frecuencia. \\
+\texttt{Funciones/Acondicionamiento.py} & Diseño y aplicación de los filtros FIR, corrección del \textit{offset} de $F_z$, detección de contactos y despegues, etiquetado de las cuatro fases, segmentación en ciclos y control de calidad. \\
+\texttt{Funciones/Features.py} & STFT continua, potencia por banda y por fase, índice GPM y prueba de permutaciones con corrección \textit{max-T}. \\
+\texttt{Funciones/Interpretacion.py} & Decodificación de los eventos a partir de la fase del EEG, clasificación de fases, metrónomo de control, escalado del modelo, generación del \texttt{.mot}, \textit{AnalyzeTool} y comparación con los IMU. \\
+\texttt{Funciones/Reporte.py} & Registro del texto y las figuras de cada etapa y exportación a PDF. \\
+\texttt{Interfaz/App.py} & Ventana principal de la interfaz \textit{EEGait}. \\
+\texttt{Interfaz/panel\_parametros.py} & Selección de sujeto, velocidades y parámetros del procesamiento. \\
+\texttt{Interfaz/trabajador.py} & Ejecución del procesamiento en un hilo separado de la ventana. \\
+\texttt{Interfaz/vista\_resultados.py} & Pestañas con los gráficos y registros de cada etapa. \\
+\texttt{Interfaz/dialogo\_opensim.py} & Rutas del modelo y de los \texttt{.mot} para abrirlos en OpenSim. \\
+\texttt{Interfaz/estilo.py} & Colores y tipografía de la interfaz. \\
+\texttt{OpenSim/generar\_plantilla.py} & Generación de la plantilla de marcha normalizada por fase a partir de los archivos de referencia de OpenSim. \\
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+\caption{Contenido de cada archivo del código.}
+\label{tab:archivos}
+\end{table}
 
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.40\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Imagenes/Anexo/fases_plataformas.png}
+        \caption{Fuerza vertical de cada pie y fases detectadas.}
+    \end{subfigure}\hspace{0.6cm}
+    \begin{subfigure}[t]{0.40\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Imagenes/Anexo/ciclo_promedio_eeg.png}
+        \caption{Ciclo promedio del EEG (media $\pm$ desvío de 35 ciclos válidos).}
+    \end{subfigure}
+    \caption{Segmentación de la marcha a 0,75 m/s. Los colores indican doble apoyo inicial, apoyo simple, doble apoyo final y balanceo.}
+    \label{fig:segmentacion}
+\end{figure}
 
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Imagenes/Anexo/stft_ciclo.png}
+        \caption{Mapas tiempo-frecuencia del ciclo promedio (cambio de potencia respecto de la media).}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Imagenes/Anexo/gpm.png}
+        \caption{GPM por canal y frecuencia, con el umbral \textit{max-T} y los valores significativos.}
+    \end{subfigure}
+    \caption{Análisis tiempo-frecuencia e índice GPM a 0,75 m/s.}
+    \label{fig:stft_gpm}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Imagenes/Anexo/clasificacion_fases.png}
+    \caption{Matrices de confusión de la clasificación en cuatro fases a 0,75 m/s, para las versiones de baja frecuencia y cortical y el metrónomo (\% por fila, referencia: plataformas).}
+    \label{fig:confusion}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{Imagenes/Anexo/fase_decodificada.png}
+    \caption{Fase del ciclo decodificada a partir del EEG (versión de baja frecuencia) frente a la de las plataformas, para cada pie, a 0,75 m/s.}
+    \label{fig:fase}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Imagenes/Anexo/opensim_vs_imu_tiempo.png}
+        \caption{Ángulos de cadera, rodilla y tobillo derechos en el tiempo.}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Imagenes/Anexo/giroscopio_simulado.png}
+        \caption{Velocidad angular sagital de muslo, pierna y pie (ciclo promedio $\pm$ desvío).}
+    \end{subfigure}
+    \caption{Simulación en OpenSim a partir de los eventos decodificados del EEG (versión de baja frecuencia) frente a los IMU, a 0,75 m/s.}
+    \label{fig:opensim}
+\end{figure}
 
 
 \end{document}

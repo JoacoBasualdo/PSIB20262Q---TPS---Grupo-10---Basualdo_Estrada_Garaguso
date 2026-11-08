@@ -15,7 +15,9 @@ Flujo (el .mot se genera solo con el EEG):
 """
 
 import os
+import io
 import glob
+import contextlib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -23,6 +25,7 @@ from scipy.signal import welch, correlate, argrelextrema, butter, filtfilt, hilb
 
 from .Lectura import RAIZ_PROYECTO
 from .Features import FS_FP
+from .Acondicionamiento import etiquetar_fases, FASES as FASES_MARCHA
 
 # Todos los eventos (los de las plataformas y los decodificados del EEG) se
 # guardan como indices a 1000 Hz, el formato de detectar_eventos()
@@ -523,6 +526,8 @@ def correr_opensim(ruta_modelo, ruta_mot, carpeta_resultados, nombre):
     resultados = {
         "q": leer("Kinematics_q.sto"),
         "pos": leer("BodyKinematics_pos_global.sto"),
+        # velocidad lineal (X, Y, Z) y angular (Ox, Oy, Oz, en °/s) de cada cuerpo
+        "vel": leer("BodyKinematics_vel_global.sto"),
     }
     print(f"  Resultados en {os.path.relpath(carpeta_resultados, RAIZ_PROYECTO)}")
     return resultados
@@ -665,7 +670,60 @@ def cargar_imu(carpeta, fs=FS_IMU):
                     columnas[f"{seg}_{eje}"] = pos[col].to_numpy(float)
         imu["posiciones"] = columnas or None
         print(f"  IMU: {os.path.basename(ruta_pos)} ({len(columnas)} columnas de posicion)")
+
+    # Velocidad angular de los segmentos (lo que mide el giroscopio de cada IMU)
+    ruta_vel = _buscar_archivo(carpeta, "segment", "angular", "velocity")
+    if ruta_vel and imu["posiciones"]:
+        velocidades = _leer_csv_imu(ruta_vel)
+        imu["archivos"].append(ruta_vel)
+        imu["vel_angular"] = _velocidad_angular_sagital(velocidades, imu["posiciones"])
+        print(f"  IMU: {os.path.basename(ruta_vel)} "
+              f"({len(imu['vel_angular'])} segmentos con velocidad angular)")
     return imu
+
+
+# Segmentos que se comparan como "IMU simulados": nombre en Xsens y cuerpo en OpenSim
+SEGMENTOS_IMU = {
+    "Muslo": {"xsens": ("upper", "leg"), "opensim": "femur"},
+    "Pierna": {"xsens": ("lower", "leg"), "opensim": "tibia"},
+    "Pie": {"xsens": ("foot",), "opensim": "calcn"},
+}
+
+
+# Sentido de avance en el marco de Xsens (mismo criterio que eventos_imu):
+# el eje horizontal con mas recorrido del pie respecto de la pelvis, y su signo
+# segun hacia donde se mueve el pie apoyado (hacia atras ~60 % del ciclo)
+def _sentido_avance(pos, lado="r"):
+    ejes = [e for e in ("x", "y") if f"pie_{lado}_{e}" in pos]
+    eje = max(ejes, key=lambda e: np.ptp(pos[f"pie_{lado}_{e}"] - pos[f"pelvis_{e}"]))
+    rel = pos[f"pie_{lado}_{eje}"] - pos[f"pelvis_{eje}"]
+    signo = 1.0 if np.mean(np.diff(rel) < 0) > 0.5 else -1.0
+    return eje, signo
+
+
+# Velocidad angular alrededor del eje lateral derecho (rotacion en el plano sagital), en °/s.
+# Xsens: Z arriba. Si se avanza hacia s*X, el eje derecho es -s*Y; si se avanza
+# hacia s*Y, el eje derecho es s*X. En OpenSim el eje derecho es Z, asi que se
+# compara con la componente Oz de BodyKinematics. Positivo = el segmento rota hacia adelante.
+def _velocidad_angular_sagital(df, pos):
+    eje, signo = _sentido_avance(pos)
+    resultado = {}
+    for pie, lado in LADOS.items():
+        lado_en = "right" if lado == "r" else "left"
+        for seg, cfg in SEGMENTOS_IMU.items():
+            columnas = {}
+            for componente in ("x", "y"):
+                col = next((c for c in df.columns
+                            if all(k in _normalizar(c) for k in (lado_en,) + cfg["xsens"])
+                            and "arm" not in _normalizar(c)
+                            and _normalizar(c).endswith(componente)), None)
+                if col is not None:
+                    columnas[componente] = df[col].to_numpy(float)
+            if len(columnas) < 2:
+                continue
+            w = -signo * columnas["y"] if eje == "x" else signo * columnas["x"]
+            resultado[(seg, pie)] = np.degrees(w)
+    return resultado
 
 # Detecta contactos y despegues desde el imu
 # Usa Zeni si hay posiciones, y si no, máximos y mínimos de la cadera (menos precisión)
@@ -909,6 +967,38 @@ def comparar_opensim_imu(res_opensim, ciclos_eeg, imu, ciclos_imu, carpeta_salid
                           "r_continuo": r_cont, "rango_opensim_deg": np.ptp(m_os),
                           "rango_imu_deg": np.ptp(m_imu)})
 
+    # --- IMU simulados: velocidad angular sagital de muslo, pierna y pie
+    # (lo que mediria un giroscopio en cada segmento del modelo vs lo que midio Xsens)
+    curvas_vel = {}
+    if imu.get("vel_angular") and "vel" in res_opensim:
+        vel_os = res_opensim["vel"]
+        t_vel = vel_os.index.to_numpy()
+        print(f"\n  IMU simulados: velocidad angular sagital (°/s)")
+        print(f"  {'Segmento':<20}{'r ciclo':>9}{'RMSE':>9}{'r continuo':>12}"
+              f"{'Pico OpenSim':>14}{'Pico IMU':>10}")
+        for seg, cfg in SEGMENTOS_IMU.items():
+            for pie, lado in LADOS.items():
+                columna = f"{cfg['opensim']}_{lado}_Oz"
+                if (seg, pie) not in imu["vel_angular"] or columna not in vel_os:
+                    continue
+                y_os = vel_os[columna].to_numpy()
+                y_imu = imu["vel_angular"][(seg, pie)]
+                cur_os = _normalizar_ciclos(t_vel, y_os, ciclos_eeg[pie])
+                cur_imu = _normalizar_ciclos(t_imu, y_imu, ciclos_imu[pie])
+                m_os, m_imu = cur_os.mean(0), cur_imu.mean(0)
+                r, rmse, sesgo, rmse_c = _metricas(m_os, m_imu)
+                t_com = np.arange(max(t_vel[0], t_imu[0] - desfase),
+                                  min(t_vel[-1], t_imu[-1] - desfase), 1 / FS_IMU)
+                r_cont = _metricas(np.interp(t_com, t_vel, y_os),
+                                   np.interp(t_com + desfase, t_imu, y_imu))[0]
+                curvas_vel[(seg, pie)] = (cur_os, cur_imu)
+                print(f"  {seg + ' ' + pie[:3].lower() + '.':<20}{r:>9.3f}{rmse:>9.0f}"
+                      f"{r_cont:>12.3f}{np.max(np.abs(m_os)):>14.0f}{np.max(np.abs(m_imu)):>10.0f}")
+                filas.append({"velocidad": vel, "tipo": "imu_simulado", "articulacion": seg,
+                              "pie": pie, "r_ciclo_medio": r, "rmse_deg": rmse,
+                              "sesgo_deg": sesgo, "rmse_sin_sesgo_deg": rmse_c,
+                              "r_continuo": r_cont})
+
     tabla = pd.DataFrame(filas)
     tabla["desfase_s"] = desfase
     os.makedirs(carpeta_salida, exist_ok=True)
@@ -919,6 +1009,8 @@ def comparar_opensim_imu(res_opensim, ciclos_eeg, imu, ciclos_imu, carpeta_salid
     figuras.append(_figura_ciclos(curvas, vel, fuente))
     figuras.append(_figura_continua(q, imu, desfase, vel, fuente=fuente))
     figuras.append(_figura_frecuencias(frecuencias, vel, fuente))
+    if curvas_vel:
+        figuras.append(_figura_imu_simulados(curvas_vel, vel, fuente))
     return tabla, figuras
 
 
@@ -1002,6 +1094,35 @@ def _figura_continua(q, imu, desfase, vel, duracion=6.0, fuente="EEG"):
     fig.tight_layout()
     return fig
 
+# IMU simulados: velocidad angular sagital de cada segmento, OpenSim vs Xsens (ciclo promedio)
+def _figura_imu_simulados(curvas, vel, fuente="EEG"):
+    x = np.linspace(0, 100, N_PUNTOS_FASE)
+    fig, ejes = plt.subplots(3, 2, sharex=True, figsize=(8.27, 9))
+    for i, seg in enumerate(SEGMENTOS_IMU):
+        for j, pie in enumerate(LADOS):
+            ax = ejes[i, j]
+            if (seg, pie) not in curvas:
+                ax.set_visible(False)
+                continue
+            cur_os, cur_imu = curvas[(seg, pie)]
+            for cur, color, nombre in ((cur_os, COLOR_OS, f"IMU simulado (OpenSim, eventos {fuente})"),
+                                       (cur_imu, COLOR_IMU, "IMU real (Xsens)")):
+                m, s = cur.mean(0), cur.std(0)
+                ax.plot(x, m, color=color, label=f"{nombre}, n={len(cur)}")
+                ax.fill_between(x, m - s, m + s, color=color, alpha=0.2)
+            r = np.corrcoef(cur_os.mean(0), cur_imu.mean(0))[0, 1]
+            ax.set_title(f"{seg} {pie.lower()}  (r = {r:.2f})", fontsize=10)
+            ax.axhline(0, color="gray", lw=0.6)
+            ax.grid(alpha=0.3)
+            if j == 0:
+                ax.set_ylabel("Vel. angular sagital (°/s)")
+    ejes[0, 0].legend(fontsize=7)
+    for ax in ejes[-1]:
+        ax.set_xlabel("Ciclo de marcha (%)")
+    fig.suptitle(f"Giroscopio simulado vs real (ciclo promedio ± DE) - {vel} m/s")
+    fig.tight_layout()
+    return fig
+
 # espectro de la rodilla en OpenSIM vs IMU
 def _figura_frecuencias(frecuencias, vel, fuente="EEG"):
     fig, ax = plt.subplots(figsize=(8.27, 4))
@@ -1043,7 +1164,9 @@ ANCHO_BANDA = 0.2         # filtro angosto: frecuencia de zancada +-20 %
 VERSIONES = {
     "baja": "EEG 0.3-4 Hz (movimiento + EEG)",
     "cortical": "EEG 8-40 Hz (mu, beta, gamma baja)",
+    "metronomo": "Metronomo (sin EEG, control)",
 }
+COLORES_VERSION = {"baja": "tab:purple", "cortical": "tab:green", "metronomo": "tab:gray"}
 PIES = ["Derecha", "Izquierda"]
 TIPOS = {"contactos": "Contacto", "despegues": "Despegue"}
 
@@ -1175,13 +1298,25 @@ def decodificar_eventos(raw, eventos_fp, f_zancada, version="baja",
     Devuelve un diccionario con el mismo formato que detectar_eventos()
     (indices a 1000 Hz), para poder usarlo directamente en generar_mot().
     """
-    senal, fs, canales = senal_baja(raw) if version == "baja" else senal_cortical(raw)
-    fases = fase_instantanea(senal, fs, f_zancada)
-    t = np.arange(senal.shape[1]) / fs
-
     def calibracion(tipo, pie):
         t_ev = eventos_fp[tipo][pie] / fs_eventos
         return t_ev[(t_ev > 1.0) & (t_ev < t_calibracion)]
+
+    if version == "metronomo":
+        # Control sin EEG: una oscilacion perfecta con el periodo medido en la
+        # calibracion (mediana de las zancadas de las plataformas) y la misma
+        # calibracion de angulos. Marca pasos a ritmo fijo: sirve para ver cuanto
+        # aporta el EEG mas alla del ritmo promedio
+        fs = raw.info["sfreq"]
+        t = np.arange(raw.n_times) / fs
+        contactos_cal = calibracion("contactos", "Derecha")
+        f_zancada = 1.0 / np.median(np.diff(contactos_cal))
+        fases = np.angle(np.exp(2j * np.pi * f_zancada * t))[None, :]
+        canales = ["-"]
+    else:
+        senal, fs, canales = senal_baja(raw) if version == "baja" else senal_cortical(raw)
+        fases = fase_instantanea(senal, fs, f_zancada)
+        t = np.arange(senal.shape[1]) / fs
 
     # Canal con la fase mas consistente en los eventos (promedio de los 4 eventos)
     plv_canal = []
@@ -1296,7 +1431,7 @@ def graficar_fase(eventos_eeg, vel, version, inicio=T_CALIBRACION + 5.0, duracio
 # muestra en que canales el EEG sigue el ritmo de la marcha
 def graficar_plv(eventos_por_version, vel):
     fig, ax = plt.subplots(figsize=(8.27, 3.8))
-    colores = {"baja": "tab:purple", "cortical": "tab:green"}
+    colores = COLORES_VERSION
     ancho = 0.8 / len(eventos_por_version)
     for k, (version, eventos) in enumerate(eventos_por_version.items()):
         canales = list(eventos["plv_canales"])
@@ -1321,12 +1456,11 @@ def graficar_errores_decodificacion(filas):
     tabla = pd.DataFrame(filas)
     tabla = tabla[tabla["evento"] == "Contacto"]
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.27, 3.8))
-    colores = {"baja": "tab:purple", "cortical": "tab:green"}
     for version, grupo in tabla.groupby("version"):
         g = grupo.groupby("velocidad")[["sensibilidad_pct", "error_abs_mediano_ms"]].mean()
-        ax1.plot(g.index, g["sensibilidad_pct"], "o-", color=colores[version],
+        ax1.plot(g.index, g["sensibilidad_pct"], "o-", color=COLORES_VERSION[version],
                  label=VERSIONES[version])
-        ax2.plot(g.index, g["error_abs_mediano_ms"], "o-", color=colores[version])
+        ax2.plot(g.index, g["error_abs_mediano_ms"], "o-", color=COLORES_VERSION[version])
     ax1.set_ylabel("Contactos detectados (%)")
     ax1.set_ylim(0, 105)
     ax2.set_ylabel("|Error| mediano (ms)")
@@ -1335,6 +1469,108 @@ def graficar_errores_decodificacion(filas):
         ax.grid(alpha=0.3)
     ax1.legend(fontsize=7, loc="lower left")
     fig.suptitle("Contactos decodificados del EEG vs plataformas (despues de la calibracion)")
+    fig.tight_layout()
+    return fig
+
+
+# Error de cada contacto (pie derecho) a lo largo del registro, para cada version.
+# El metronomo acumula error con el tiempo (los pasos reales no duran siempre lo mismo);
+# si el EEG sigue cada paso, su error no deberia crecer
+def graficar_error_temporal(eventos_por_version, eventos_fp, vel, fs_eventos=FS_EVENTOS,
+                            t_calibracion=T_CALIBRACION):
+    fig, ax = plt.subplots(figsize=(8.27, 3.8))
+    real = eventos_fp["contactos"]["Derecha"] / fs_eventos
+    real = real[real > t_calibracion]
+    for version, eventos in eventos_por_version.items():
+        pred = eventos["contactos"]["Derecha"] / fs_eventos
+        pred = pred[pred >= t_calibracion]
+        if len(pred) == 0 or len(real) == 0:
+            continue
+        err = pred[:, None] - real[None, :]
+        idx = np.abs(err).argmin(axis=1)
+        err = err[np.arange(len(pred)), idx]
+        ok = np.abs(err) < 0.5
+        ax.plot(real[idx[ok]], 1000 * err[ok], "o-", ms=3, lw=1,
+                color=COLORES_VERSION[version], label=VERSIONES[version])
+    ax.axhline(0, color="black", lw=0.6)
+    ax.set_xlabel("Tiempo (s)")
+    ax.set_ylabel("Error del contacto\nderecho (ms)")
+    ax.set_title(f"Error de los contactos a lo largo del registro - {vel} m/s")
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7)
+    fig.tight_layout()
+    return fig
+
+
+# ==========================================================
+# CLASIFICACION DE LAS FASES DE LA MARCHA
+# ==========================================================
+
+# Apoyo (True) o balanceo (False) en cada muestra a partir de contactos y despegues:
+# despues de un contacto el pie esta apoyado, despues de un despegue esta en el aire
+def _estados_desde_eventos(contactos, despegues, n_muestras):
+    estado = np.zeros(n_muestras, dtype=bool)
+    marcas = sorted([(int(c), True) for c in contactos] + [(int(d), False) for d in despegues])
+    for (inicio, apoyado), (fin, _) in zip(marcas[:-1], marcas[1:]):
+        estado[max(inicio, 0):min(fin, n_muestras)] = apoyado
+    return estado
+
+
+# Clasifica cada instante en apoyo/balanceo (cada pie) y en las 4 fases de la Etapa 4
+# (doble apoyo inicial, apoyo simple, doble apoyo final, balanceo) usando los eventos
+# decodificados, con la misma funcion etiquetar_fases que usan las plataformas.
+# Se compara muestra a muestra con las plataformas, solo despues de la calibracion
+def clasificar_fases(eventos_dec, eventos_fp, vel, version, fs_eventos=FS_EVENTOS,
+                     t_calibracion=T_CALIBRACION):
+    n = len(eventos_fp["tiempo"])
+    estados_dec = {pie: _estados_desde_eventos(eventos_dec["contactos"][pie],
+                                               eventos_dec["despegues"][pie], n)
+                   for pie in PIES}
+    dec = {"tiempo": eventos_fp["tiempo"], "estados": estados_dec,
+           "contactos": eventos_dec["contactos"], "despegues": eventos_dec["despegues"]}
+    with contextlib.redirect_stdout(io.StringIO()):     # etiquetar_fases imprime su tabla
+        fases_dec = etiquetar_fases({vel: dec}, primer_ciclo=1)[vel]
+        fases_real = etiquetar_fases({vel: eventos_fp}, primer_ciclo=1)[vel]
+
+    # Tramo evaluado: despues de la calibracion y donde ambas clasificaciones existen
+    t = np.arange(n) / fs_eventos
+    validas = (t >= t_calibracion) & (fases_dec >= 0) & (fases_real >= 0)
+    fila = {"velocidad": vel, "version": version}
+    for pie in PIES:
+        fila[f"apoyo_balanceo_{pie.lower()}_pct"] = 100 * np.mean(
+            estados_dec[pie][validas] == eventos_fp["estados"][pie][validas])
+    fila["fases_4_pct"] = 100 * np.mean(fases_dec[validas] == fases_real[validas])
+
+    # Matriz de confusion (filas: fase real; columnas: fase decodificada), en % por fila
+    k = len(FASES_MARCHA)
+    confusion = np.zeros((k, k))
+    for i in range(k):
+        sel = validas & (fases_real == i)
+        for j in range(k):
+            confusion[i, j] = 100 * np.mean(fases_dec[sel] == j) if sel.any() else np.nan
+    return fila, confusion
+
+
+# Matrices de confusion de las 4 fases, una por version
+def graficar_confusion(confusiones, vel):
+    fig, ejes = plt.subplots(1, len(confusiones), figsize=(8.27, 3.4))
+    ejes = np.atleast_1d(ejes)
+    etiquetas = ["DA ini.", "Apoyo s.", "DA fin.", "Balanceo"]
+    for ax, (version, matriz) in zip(ejes, confusiones.items()):
+        ax.imshow(matriz, vmin=0, vmax=100, cmap="Blues")
+        for i in range(matriz.shape[0]):
+            for j in range(matriz.shape[1]):
+                if np.isfinite(matriz[i, j]):
+                    ax.text(j, i, f"{matriz[i, j]:.0f}", ha="center", va="center", fontsize=7,
+                            color="white" if matriz[i, j] > 60 else "black")
+        ax.set_xticks(range(len(etiquetas)))
+        ax.set_xticklabels(etiquetas, fontsize=6, rotation=45)
+        ax.set_yticks(range(len(etiquetas)))
+        ax.set_yticklabels(etiquetas, fontsize=6)
+        ax.set_title(VERSIONES[version], fontsize=7)
+        ax.set_xlabel("Decodificada", fontsize=7)
+    ejes[0].set_ylabel("Real (plataformas)", fontsize=7)
+    fig.suptitle(f"Clasificacion de las fases de la marcha (% por fila) - {vel} m/s")
     fig.tight_layout()
     return fig
 
@@ -1401,32 +1637,61 @@ def graficar_frecuencia_eeg(resultados):
 
 # Decodificación de la marcha según EEG por versión
 # Usa decodificar_eventos (fase de Hilbert + calibracion), evalúa el resultado y lo grafica
-def decodificar_marcha_eeg(dict_eeg, dict_eventos, zancadas, versiones=("baja", "cortical")):
+# Agrega el metronomo como control (no se simula en OpenSim) y clasifica las fases
+def decodificar_marcha_eeg(dict_eeg, dict_eventos, zancadas, versiones=("baja", "cortical"),
+                           control=True):
     """
     Decodifica los eventos de cada velocidad con cada version de la senal.
     Devuelve ({version: {vel: eventos}}, tabla de metricas, figuras).
     """
     import pandas as pd
-    resultados = {v: {} for v in versiones}
-    filas, figuras = [], []
+    todas = list(versiones) + (["metronomo"] if control else [])
+    resultados = {v: {} for v in todas}
+    filas, filas_fases, figuras = [], [], []
     for vel in dict_eventos:
         if vel not in dict_eeg or vel not in zancadas:
             continue
-        for version in versiones:
+        confusiones = {}
+        for version in todas:
             eventos = decodificar_eventos(dict_eeg[vel], dict_eventos[vel], zancadas[vel], version)
             resultados[version][vel] = eventos
             filas += evaluar_eventos(eventos, dict_eventos[vel], vel, version)
-            figuras.append(graficar_fase(eventos, vel, version))
+            fila, confusion = clasificar_fases(eventos, dict_eventos[vel], vel, version)
+            filas_fases.append(fila)
+            confusiones[version] = confusion
+            if version != "metronomo":
+                figuras.append(graficar_fase(eventos, vel, version))
         figuras.append(graficar_plv({v: resultados[v][vel] for v in versiones}, vel))
+        figuras.append(graficar_error_temporal({v: resultados[v][vel] for v in todas},
+                                               dict_eventos[vel], vel))
+        figuras.append(graficar_confusion(confusiones, vel))
 
     tabla = pd.DataFrame(filas)
     print(f"  Calibracion con los primeros {T_CALIBRACION:.0f} s; metricas sobre el resto del registro")
-    print(f"\n  {'Vel.':<6}{'Version':<10}{'Canal':<7}{'Evento':<10}{'Pie':<11}{'PLV':>5}"
+    print(f"\n  {'Vel.':<6}{'Version':<11}{'Canal':<7}{'Evento':<10}{'Pie':<11}{'PLV':>5}"
           f"{'Detect.':>10}{'Sens. (%)':>11}{'Falsos':>8}{'|Err| med (ms)':>16}{'r fase':>8}")
     for _, f in tabla.iterrows():
-        print(f"  {f['velocidad']:<6}{f['version']:<10}{f['canal']:<7}{f['evento']:<10}{f['pie']:<11}"
+        print(f"  {f['velocidad']:<6}{f['version']:<11}{f['canal']:<7}{f['evento']:<10}{f['pie']:<11}"
               f"{f['plv']:>5.2f}{f['detectados']:>5}/{f['reales']:<4}{f['sensibilidad_pct']:>11.0f}"
               f"{f['falsos']:>8}{f['error_abs_mediano_ms']:>16.0f}{f['r_fase']:>8.2f}")
+
+    # Error medio por mitad del tramo evaluado: el metronomo deberia empeorar al final
+    print(f"\n  |Error| mediano de los contactos por tramo (ms)")
+    print(f"  {'Vel.':<6}{'Version':<11}{'1.a mitad':>11}{'2.a mitad':>11}")
+    for vel in dict_eventos:
+        for version in todas:
+            if vel not in resultados[version]:
+                continue
+            mitades = _error_por_mitad(resultados[version][vel], dict_eventos[vel])
+            print(f"  {vel:<6}{version:<11}{mitades[0]:>11.0f}{mitades[1]:>11.0f}")
+
+    # Clasificacion de fases (muestra a muestra, despues de la calibracion)
+    tabla_fases = pd.DataFrame(filas_fases)
+    print(f"\n  Clasificacion de fases (% de muestras iguales a las plataformas)")
+    print(f"  {'Vel.':<6}{'Version':<11}{'Apoyo/balanceo der.':>21}{'Apoyo/balanceo izq.':>21}{'4 fases':>10}")
+    for _, f in tabla_fases.iterrows():
+        print(f"  {f['velocidad']:<6}{f['version']:<11}{f['apoyo_balanceo_derecha_pct']:>21.1f}"
+              f"{f['apoyo_balanceo_izquierda_pct']:>21.1f}{f['fases_4_pct']:>10.1f}")
 
     # Control de la version cortical: que banda aporta el ritmo de la marcha
     if "cortical" in versiones:
@@ -1437,7 +1702,30 @@ def decodificar_marcha_eeg(dict_eeg, dict_eventos, zancadas, versiones=("baja", 
             print(f"  {vel:<6}{eventos['canal']:<7}" + "".join(f"{plv[b]:>12.2f}" for b in BANDAS_CORTICALES))
 
     figuras.append(graficar_errores_decodificacion(filas))
+    tabla = tabla.merge(tabla_fases, on=["velocidad", "version"], how="left")
     return resultados, tabla, figuras
+
+
+# |Error| mediano de los contactos (ambos pies) en la primera y la segunda mitad
+# del tramo evaluado (despues de la calibracion)
+def _error_por_mitad(eventos_dec, eventos_fp, fs_eventos=FS_EVENTOS, t_calibracion=T_CALIBRACION):
+    t_fin = eventos_dec["tiempo"][-1]
+    t_medio = (t_calibracion + t_fin) / 2
+    errores = {0: [], 1: []}
+    for pie in PIES:
+        real = eventos_fp["contactos"][pie] / fs_eventos
+        real = real[(real > t_calibracion) & (real < t_fin)]
+        pred = eventos_dec["contactos"][pie] / fs_eventos
+        pred = pred[pred >= t_calibracion]
+        if len(pred) == 0 or len(real) == 0:
+            continue
+        err = pred[:, None] - real[None, :]
+        idx = np.abs(err).argmin(axis=1)
+        err = err[np.arange(len(pred)), idx]
+        for e, tr in zip(err, real[idx]):
+            if abs(e) < 0.5:
+                errores[int(tr >= t_medio)].append(abs(e))
+    return [1000 * np.median(errores[i]) if errores[i] else np.nan for i in (0, 1)]
 
 
 # ==========================================================

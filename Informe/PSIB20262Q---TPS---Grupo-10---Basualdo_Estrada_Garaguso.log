@@ -1,10 +1,10 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.9.8)  1 NOV 2026 13:01
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.9.8)  8 NOV 2026 20:46
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**c:/Users/facun/OneDrive/Documentos/GitHub/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso/Informe/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.tex
-(c:/Users/facun/OneDrive/Documentos/GitHub/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso/Informe/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.tex
+**"d:/Usuarios/Escritorio/Carpetas/Archivos e Imagenes/Facultad/ITBA 2026/2Q/PSIB/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso/Informe/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.tex"
+(d:/Usuarios/Escritorio/Carpetas/Archivos e Imagenes/Facultad/ITBA 2026/2Q/PSIB/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso/Informe/PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.tex
 LaTeX2e <2026-06-01>
 L3 programming layer <2026-08-10>
 (c:/texlive/2026/texmf-dist/tex/latex/base/article.cls
@@ -570,23 +570,71 @@ LaTeX Info: Redefining \% on input line 1.
 \openout4 = `PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.toc'.
 
  [2]
-<Imagenes/CortezaMotora.png, id=123, 469.755pt x 365.11406pt>
+<Imagenes/CortezaMotora.png, id=138, 469.755pt x 365.11406pt>
 File: Imagenes/CortezaMotora.png Graphic file (type png)
 <use Imagenes/CortezaMotora.png>
-Package pdftex.def Info: Imagenes/CortezaMotora.png  used on input line 163.
-(pdftex.def)             Requested size: 170.71393pt x 132.68332pt.
+Package pdftex.def Info: Imagenes/CortezaMotora.png  used on input line 166.
+(pdftex.def)             Requested size: 128.0387pt x 99.5125pt.
  [3 <./Imagenes/CortezaMotora.png>]
-<Imagenes/Sistema 10-20.png, id=132, 807.7678pt x 328.97906pt>
+<Imagenes/Sistema 10-20.png, id=147, 807.7678pt x 328.97906pt>
 File: Imagenes/Sistema 10-20.png Graphic file (type png)
 <use Imagenes/Sistema 10-20.png>
 Package pdftex.def Info: Imagenes/Sistema 10-20.png  used on input line 187.
-(pdftex.def)             Requested size: 192.0548pt x 78.21365pt.
-<Imagenes/Setup.png, id=133, 363.60844pt x 247.67531pt>
+(pdftex.def)             Requested size: 145.10748pt x 59.0932pt.
+<Imagenes/Setup.png, id=148, 363.60844pt x 247.67531pt>
 File: Imagenes/Setup.png Graphic file (type png)
 <use Imagenes/Setup.png>
 Package pdftex.def Info: Imagenes/Setup.png  used on input line 193.
-(pdftex.def)             Requested size: 192.0548pt x 130.82133pt.
- [4 <./Imagenes/Sistema 10-20.png> <./Imagenes/Setup.png>] [5] [6] [7] [8{c:/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc}] (./PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.aux
+(pdftex.def)             Requested size: 145.10748pt x 98.84161pt.
+ [4 <./Imagenes/Sistema 10-20.png> <./Imagenes/Setup.png>] [5] [6] [7] [8] [9] [10]
+Underfull \hbox (badness 1038) in paragraph at lines 428--429
+\T1/cmr/m/n/10 & Kha-laf, K. (s.f.). \T1/cmr/m/it/10 A Mul-ti-mo-dal Gait Da-ta-set of Brain Ac-ti-vity, Mus-cle Ac-ti-vity,
+ []
+
+[11{c:/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc}]
+<Imagenes/Anexo/fases_plataformas.png, id=224, 1629.08624pt x 1196.47pt>
+File: Imagenes/Anexo/fases_plataformas.png Graphic file (type png)
+<use Imagenes/Anexo/fases_plataformas.png>
+Package pdftex.def Info: Imagenes/Anexo/fases_plataformas.png  used on input line 473.
+(pdftex.def)             Requested size: 170.71393pt x 125.36833pt.
+<Imagenes/Anexo/ciclo_promedio_eeg.png, id=225, 1627.07875pt x 1786.675pt>
+File: Imagenes/Anexo/ciclo_promedio_eeg.png Graphic file (type png)
+<use Imagenes/Anexo/ciclo_promedio_eeg.png>
+Package pdftex.def Info: Imagenes/Anexo/ciclo_promedio_eeg.png  used on input line 478.
+(pdftex.def)             Requested size: 170.71393pt x 187.45647pt.
+<Imagenes/Anexo/stft_ciclo.png, id=226, 1660.2025pt x 2007.5pt>
+File: Imagenes/Anexo/stft_ciclo.png Graphic file (type png)
+<use Imagenes/Anexo/stft_ciclo.png>
+Package pdftex.def Info: Imagenes/Anexo/stft_ciclo.png  used on input line 489.
+(pdftex.def)             Requested size: 209.1301pt x 252.8667pt.
+<Imagenes/Anexo/gpm.png, id=227, 1660.2025pt x 2409.0pt>
+File: Imagenes/Anexo/gpm.png Graphic file (type png)
+<use Imagenes/Anexo/gpm.png>
+Package pdftex.def Info: Imagenes/Anexo/gpm.png  used on input line 494.
+(pdftex.def)             Requested size: 209.1301pt x 303.44003pt.
+ [12 <./Imagenes/Anexo/fases_plataformas.png (PNG copy)> <./Imagenes/Anexo/ciclo_promedio_eeg.png (PNG copy)>]
+<Imagenes/Anexo/clasificacion_fases.png, id=235, 1629.08624pt x 681.54625pt>
+File: Imagenes/Anexo/clasificacion_fases.png Graphic file (type png)
+<use Imagenes/Anexo/clasificacion_fases.png>
+Package pdftex.def Info: Imagenes/Anexo/clasificacion_fases.png  used on input line 503.
+(pdftex.def)             Requested size: 384.10959pt x 160.69376pt.
+<Imagenes/Anexo/fase_decodificada.png, id=236, 1629.08624pt x 1081.03876pt>
+File: Imagenes/Anexo/fase_decodificada.png Graphic file (type png)
+<use Imagenes/Anexo/fase_decodificada.png>
+Package pdftex.def Info: Imagenes/Anexo/fase_decodificada.png  used on input line 510.
+(pdftex.def)             Requested size: 320.09349pt x 212.41pt.
+ [13 <./Imagenes/Anexo/stft_ciclo.png (PNG copy)> <./Imagenes/Anexo/gpm.png (PNG copy)> <./Imagenes/Anexo/clasificacion_fases.png (PNG copy)>]
+<Imagenes/Anexo/opensim_vs_imu_tiempo.png, id=245, 1630.09pt x 1375.1375pt>
+File: Imagenes/Anexo/opensim_vs_imu_tiempo.png Graphic file (type png)
+<use Imagenes/Anexo/opensim_vs_imu_tiempo.png>
+Package pdftex.def Info: Imagenes/Anexo/opensim_vs_imu_tiempo.png  used on input line 519.
+(pdftex.def)             Requested size: 209.1301pt x 176.40308pt.
+<Imagenes/Anexo/giroscopio_simulado.png, id=246, 1632.0975pt x 1766.6pt>
+File: Imagenes/Anexo/giroscopio_simulado.png Graphic file (type png)
+<use Imagenes/Anexo/giroscopio_simulado.png>
+Package pdftex.def Info: Imagenes/Anexo/giroscopio_simulado.png  used on input line 524.
+(pdftex.def)             Requested size: 209.1301pt x 226.35046pt.
+ [14 <./Imagenes/Anexo/fase_decodificada.png (PNG copy)> <./Imagenes/Anexo/opensim_vs_imu_tiempo.png (PNG copy)> <./Imagenes/Anexo/giroscopio_simulado.png (PNG copy)>] (./PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.aux
 LaTeX Info: Redefining \. on input line 12.
 LaTeX Info: Redefining \% on input line 12.
 )
@@ -595,21 +643,21 @@ LaTeX2e <2026-06-01>
 L3 programming layer <2026-08-10>
  ***********
 Package rerunfilecheck Info: File `PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.out' has not changed.
-(rerunfilecheck)             Checksum: A796D00173DEE923AFF302DF3E7BF78A;2982.
+(rerunfilecheck)             Checksum: D4F39FCE750F4094A27D376ACC3D0DF2;4020.
  ) 
 Here is how much of TeX's memory you used:
- 19297 strings out of 467099
- 374937 string characters out of 5412503
- 772236 words of memory out of 5000000
- 48387 multiletter control sequences out of 15000+600000
- 640389 words of font info for 64 fonts, out of 8000000 for 9000
+ 19432 strings out of 467098
+ 378314 string characters out of 5412482
+ 783642 words of memory out of 5000000
+ 48488 multiletter control sequences out of 15000+600000
+ 647483 words of font info for 86 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 74i,11n,80p,890b,1131s stack positions out of 10000i,1000n,20000p,200000b,200000s
-<c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx2074.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1728.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0900.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt1000.pfb>
-Output written on PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.pdf (8 pages, 868484 bytes).
+ 74i,12n,80p,1090b,1135s stack positions out of 10000i,1000n,20000p,200000b,200000s
+<c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx2074.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1440.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1728.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0800.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0900.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1200.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti0800.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti0900.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfti1000.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt0800.pfb><c:/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt1000.pfb>
+Output written on PSIB20262Q---TPS---Grupo-10---Basualdo_Estrada_Garaguso.pdf (14 pages, 2650892 bytes).
 PDF statistics:
- 247 PDF objects out of 1000 (max. 8388607)
- 196 compressed objects within 2 object streams
- 32 named destinations out of 1000 (max. 500000)
- 176 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 383 PDF objects out of 1000 (max. 8388607)
+ 295 compressed objects within 3 object streams
+ 52 named destinations out of 1000 (max. 500000)
+ 240 words of extra memory for PDF output out of 10000 (max. 10000000)
 

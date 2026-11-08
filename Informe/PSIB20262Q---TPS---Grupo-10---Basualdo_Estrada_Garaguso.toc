@@ -3,19 +3,22 @@
 \contentsline {subsection}{\numberline {1.1}Marco Teórico}{3}{subsection.1.1}%
 \contentsline {subsubsection}{\numberline {1.1.1}Marcha}{3}{subsubsection.1.1.1}%
 \contentsline {subsubsection}{\numberline {1.1.2}EEG}{3}{subsubsection.1.1.2}%
-\contentsline {subsection}{\numberline {1.2}Estado del arte}{4}{subsection.1.2}%
-\contentsline {subsection}{\numberline {1.3}Objetivos}{5}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.2}Estado del arte}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Objetivos}{4}{subsection.1.3}%
 \contentsline {section}{\numberline {2}Materiales y Métodos}{5}{section.2}%
 \contentsline {subsection}{\numberline {2.1}Datos utilizados}{5}{subsection.2.1}%
 \contentsline {subsection}{\numberline {2.2}Preprocesamiento del EEG}{5}{subsection.2.2}%
-\contentsline {subsection}{\numberline {2.3}Detección de eventos y segmentación}{5}{subsection.2.3}%
-\contentsline {subsection}{\numberline {2.4}Control de calidad}{6}{subsection.2.4}%
-\contentsline {subsection}{\numberline {2.5}Análisis tiempo-frecuencia}{6}{subsection.2.5}%
-\contentsline {subsection}{\numberline {2.6}Índice GPM y análisis estadístico}{6}{subsection.2.6}%
-\contentsline {subsection}{\numberline {2.7}Modelado biomecánico mediante OpenSim}{7}{subsection.2.7}%
-\contentsline {subsection}{\numberline {2.8}Comparación con los registros IMU}{7}{subsection.2.8}%
-\contentsline {subsection}{\numberline {2.9}Interfaz gráfica}{7}{subsection.2.9}%
-\contentsline {section}{\numberline {3}Resultados}{8}{section.3}%
-\contentsline {section}{\numberline {4}Conclusiones}{8}{section.4}%
-\contentsline {section}{\numberline {5}Bibliografía}{8}{section.5}%
-\contentsline {section}{\numberline {6}Anexo}{8}{section.6}%
+\contentsline {subsection}{\numberline {2.3}Detección de eventos, segmentación y control de calidad}{6}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Análisis tiempo-frecuencia e índice GPM}{6}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}Decodificación de la marcha a partir del EEG}{6}{subsection.2.5}%
+\contentsline {subsection}{\numberline {2.6}Modelado en OpenSim y comparación con los IMU}{7}{subsection.2.6}%
+\contentsline {subsection}{\numberline {2.7}Interfaz gráfica}{7}{subsection.2.7}%
+\contentsline {section}{\numberline {3}Resultados}{7}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Acondicionamiento y segmentación}{7}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Análisis tiempo-frecuencia}{8}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Índice GPM}{8}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Decodificación de la marcha a partir del EEG}{8}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Simulación en OpenSim y comparación con IMU}{9}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Conclusiones}{10}{section.4}%
+\contentsline {section}{\numberline {5}Bibliografía}{11}{section.5}%
+\contentsline {section}{\numberline {6}Anexo}{12}{section.6}%

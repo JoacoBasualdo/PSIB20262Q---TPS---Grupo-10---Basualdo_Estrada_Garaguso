@@ -10,13 +10,14 @@ numpy>=1.23.0
 
 
 
-# Filtrado digital (firwin, filtfilt, freqz)
+# Filtrado digital (firwin, filtfilt, freqz, butter), Welch, STFT,
+# transformada de Hilbert e interpolación
 
 scipy>=1.9.0
 
 
 
-# Lectura y manipulación de archivos tabulares (EMG, FP en formato CSV)
+# Lectura y manipulación de archivos tabulares (FP, IMU y subject-info en formato CSV)
 
 pandas>=2.0.0
 
@@ -27,6 +28,14 @@ pandas>=2.0.0
 matplotlib>=3.6.0
 
 
+
+# Interfaz gráfica (Interfaz/App.py)
+
+PySide6>=6.5.0
+
+
+
 # API de OpenSim (escalado del modelo, .mot y AnalyzeTool)
+# Si pip no la encuentra para tu versión de Python: conda install -c opensim-org opensim
 
 opensim>=4.5

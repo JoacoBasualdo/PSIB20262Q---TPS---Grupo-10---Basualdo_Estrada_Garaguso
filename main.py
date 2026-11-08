@@ -609,6 +609,15 @@ def ejecutar_pipeline(
                 "desfase con los IMU."
             )
             print(
+                "  - Control: un metronomo (ritmo fijo, sin EEG) con la "
+                "misma calibracion, para medir cuanto aporta el EEG."
+            )
+            print(
+                "  - Se clasifica cada instante en apoyo/balanceo y en las "
+                "4 fases, y se comparan IMU simulados (velocidad angular "
+                "de muslo, pierna y pie) con los reales."
+            )
+            print(
                 "  - Version 'baja' (0.3-4 Hz): incluye el artefacto "
                 "de movimiento de cada paso."
             )
