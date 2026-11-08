@@ -72,6 +72,7 @@ class Trabajador(QObject):
         self.parametros = parametros
 
     def ejecutar(self):
+        """Ejecuta el pipeline y prepara la vista, notificando cualquier error."""
         consola_original = sys.stdout
         inicio = time.perf_counter()
         try:
@@ -80,12 +81,14 @@ class Trabajador(QObject):
                 **self.parametros,
                 al_iniciar_etapa=self.etapa_iniciada.emit
             )
-        except Exception as error:
-            self.fallo.emit(mensaje_amigable(error), traceback.format_exc())
-        else:
+
+            # La conversión de figuras también puede fallar y debe
+            # quedar protegida por el mismo bloque try/except.
             self.texto_emitido.emit("\nPreparando los gráficos para mostrarlos...\n")
             resultados["vista"] = _preparar_vista(resultados["elementos"])
             self.terminado.emit(resultados, time.perf_counter() - inicio)
+        except Exception as error:
+            self.fallo.emit(mensaje_amigable(error), traceback.format_exc())
         finally:
             sys.stdout = consola_original
             try:
