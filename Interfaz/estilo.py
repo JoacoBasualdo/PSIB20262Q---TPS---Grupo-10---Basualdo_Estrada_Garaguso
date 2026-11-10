@@ -157,6 +157,19 @@ QPushButton:disabled {{
     background: {FONDO};
 }}
 
+QPushButton#botonZoom {{
+    font-size: 13pt;
+    font-weight: bold;
+    min-width: 30px;
+    max-width: 30px;
+    padding: 2px 0px;
+}}
+
+QLabel#etiquetaZoom {{
+    color: {TEXTO_SECUNDARIO};
+    font-weight: bold;
+}}
+
 QPushButton#botonPrincipal {{
     background: {PRIMARIO};
     color: white;

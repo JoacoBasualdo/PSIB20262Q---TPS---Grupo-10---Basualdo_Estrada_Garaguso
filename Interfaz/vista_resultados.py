@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
@@ -11,18 +11,23 @@ class ImagenAjustable(QLabel):
         self.setAlignment(Qt.AlignHCenter)
         self.setPixmap(imagen)
 
-    def ajustar_ancho(self, ancho_disponible):
-        ancho = min(self.original.width(), max(ancho_disponible, 200))
+    def ajustar_ancho(self, ancho_disponible, zoom=1.0):
+        ancho_base = min(self.original.width(), max(ancho_disponible, 200))
+        ancho = max(int(ancho_base * zoom), 50)
         self.setPixmap(self.original.scaledToWidth(ancho, Qt.SmoothTransformation))
 
 
 class PestanaEtapa(QScrollArea):
+
+    zoom_solicitado = Signal(int)
 
     def __init__(self, titulo, elementos):
         super().__init__()
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.NoFrame)
         self.imagenes = []
+        self.etiquetas_con_fuente = []
+        self.zoom = 1.0
 
         contenido = QWidget()
         disposicion = QVBoxLayout(contenido)
@@ -34,6 +39,7 @@ class PestanaEtapa(QScrollArea):
         etiqueta_titulo.setFont(fuente_titulo)
         etiqueta_titulo.setStyleSheet("color: #02568A; padding-bottom: 6px;")
         etiqueta_titulo.setWordWrap(True)
+        self.etiquetas_con_fuente.append((etiqueta_titulo, 14))
         disposicion.addWidget(etiqueta_titulo)
 
         for tipo, valor in elementos:
@@ -55,6 +61,7 @@ class PestanaEtapa(QScrollArea):
         etiqueta.setFont(fuente)
         etiqueta.setWordWrap(True)
         etiqueta.setStyleSheet("color: #02568A; padding-top: 12px; padding-bottom: 3px;")
+        self.etiquetas_con_fuente.append((etiqueta, 11))
         return etiqueta
 
     def _crear_texto(self, texto):
@@ -63,6 +70,7 @@ class PestanaEtapa(QScrollArea):
         etiqueta.setFont(QFont("Consolas", 9))
         etiqueta.setTextInteractionFlags(Qt.TextSelectableByMouse)
         etiqueta.setStyleSheet("background: #F7F9FC; border-radius: 6px; padding: 8px;")
+        self.etiquetas_con_fuente.append((etiqueta, 9))
         return etiqueta
 
     def _crear_imagen(self, datos_png):
@@ -72,11 +80,29 @@ class PestanaEtapa(QScrollArea):
         self.imagenes.append(etiqueta)
         return etiqueta
 
-    def resizeEvent(self, evento):
-        super().resizeEvent(evento)
+    def aplicar_zoom(self, zoom):
+        self.zoom = zoom
+        for etiqueta, tamanio_base in self.etiquetas_con_fuente:
+            fuente = etiqueta.font()
+            fuente.setPointSizeF(tamanio_base * zoom)
+            etiqueta.setFont(fuente)
+        self._ajustar_imagenes()
+
+    def _ajustar_imagenes(self):
         ancho = self.viewport().width() - 30
         for imagen in self.imagenes:
-            imagen.ajustar_ancho(ancho)
+            imagen.ajustar_ancho(ancho, self.zoom)
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        self._ajustar_imagenes()
+
+    def wheelEvent(self, evento):
+        if evento.modifiers() & Qt.ControlModifier:
+            self.zoom_solicitado.emit(1 if evento.angleDelta().y() > 0 else -1)
+            evento.accept()
+            return
+        super().wheelEvent(evento)
 
 
 def agrupar_por_etapa(vista):
