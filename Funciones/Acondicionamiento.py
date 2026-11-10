@@ -236,7 +236,7 @@ def segmentar_ciclos(dict_eeg, dict_eventos, dict_fases, pie="Derecha",
 
             fases_ciclos.append(fases[indices_fp])
 
-            # Guardamos los tiempos originales para el análisis Morlet
+            # Guardamos los tiempos originales para el análisis tiempo-frecuencia
             intervalos.append((t0, t1))
 
         if not ciclos:
